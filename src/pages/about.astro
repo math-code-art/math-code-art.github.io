@@ -1,0 +1,97 @@
+---
+import Layout from '../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+<Layout title="About">
+
+  <section class="section">
+    <div class="container narrow">
+
+      <h1>About</h1>
+
+      <p class="prominent">
+        Math + Code + Art is a project by students and faculty at the UCLA Mathematics department.
+        Each tutorial takes a mathematical idea, works through it in Python, and produces something
+        visual or audio as the output — an animation, a generated image, a line drawing.
+      </p>
+
+      <p>
+        The tutorials came out of a collaborative initiative between student mentees and faculty
+        advisors at UCLA, where each project was developed from scratch. Topics range from audio-driven
+        visuals and neural style transfer to single-line drawings produced by solving a travelling
+        salesman problem.
+      </p>
+
+      <hr class="divider" />
+
+      <h2>How the tutorials work</h2>
+
+      <div class="points">
+        <div class="point">
+          <h3>Self-contained</h3>
+          <p>Each tutorial is a single Jupyter notebook. They can be read in any order.</p>
+        </div>
+        <div class="point">
+          <h3>Math and code together</h3>
+          <p>The mathematical idea and its implementation are explained side by side. The code
+          follows directly from the math rather than abstracting it away.</p>
+        </div>
+        <div class="point">
+          <h3>On GitHub</h3>
+          <p>All notebooks are in the public
+            <a href="https://github.com/jiayinlu19960224/Math-Code-Art" target="_blank" rel="noopener" class="link">Math-Code-Art repository</a>
+            and can be run locally with standard Python packages.
+          </p>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="nav-btns">
+        <a href={`${base}tutorials`} class="btn btn-primary">Tutorials</a>
+        <a href={`${base}team`} class="btn btn-ghost">Team</a>
+      </div>
+
+    </div>
+  </section>
+
+</Layout>
+
+<style>
+.narrow { max-width: 680px; }
+
+h1 { margin-bottom: 1.75rem; }
+h2 { margin-bottom: 1.5rem; }
+
+.prominent {
+  font-size: 1.05rem;
+  color: var(--text);
+  line-height: 1.8;
+  margin-bottom: 1.1rem;
+}
+p { margin-bottom: 0; }
+
+.divider {
+  margin: 2.75rem 0;
+}
+
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+.point h3 { margin-bottom: 0.3rem; }
+
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.link:hover { opacity: 0.8; }
+
+.nav-btns {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+</style>

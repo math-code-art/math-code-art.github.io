@@ -1,0 +1,36 @@
+---
+import Layout from '../layouts/Layout.astro';
+import TutorialCard from '../components/TutorialCard.astro';
+import { tutorials } from '../data/tutorials';
+const base = import.meta.env.BASE_URL;
+---
+<Layout title="Tutorials">
+
+  <section class="section-sm page-header">
+    <div class="container">
+      <h1>Tutorials</h1>
+      <p>Nine projects, each a self-contained Jupyter notebook.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top: 1rem">
+    <div class="container">
+      <div class="grid-2">
+        {tutorials.map((t, i) => (
+          <TutorialCard
+            tutorial={t}
+            index={i}
+            href={`${base}tutorials/${t.slug}`}
+            showDescription={true}
+          />
+        ))}
+      </div>
+    </div>
+  </section>
+
+</Layout>
+
+<style>
+.page-header { border-bottom: 1px solid var(--border); padding-bottom: 2rem; }
+.page-header h1 { margin-bottom: 0.4rem; }
+</style>

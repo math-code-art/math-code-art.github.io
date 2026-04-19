@@ -1,0 +1,111 @@
+---
+import type { Tutorial } from '../data/tutorials';
+
+interface Props {
+  tutorial: Tutorial;
+  index: number;
+  href: string;
+  showDescription?: boolean;
+}
+
+const { tutorial: t, index, href, showDescription = false } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+function resolveSrc(src: string) {
+  if (src.startsWith('local:')) return `${base}gallery/${src.slice(6)}`;
+  return src;
+}
+
+const firstItem = t.gallery[0] ?? null;
+const previewSrc = firstItem ? resolveSrc(firstItem.src) : null;
+const previewKind = firstItem?.kind ?? 'image';
+---
+
+<a href={href} class={`card tut-card${previewSrc ? ' has-preview' : ''}`}>
+  {previewSrc && (
+    <div class="tut-preview">
+      {previewKind === 'video'
+        ? <video src={previewSrc} muted loop playsinline autoplay class="preview-media" />
+        : <img src={previewSrc} alt={t.title} class="preview-media" loading="lazy" />
+      }
+    </div>
+  )}
+  <div class="tut-body">
+    <div class="tut-top">
+      <span class="tut-num">{String(index + 1).padStart(2, '0')}</span>
+      <div class="tut-tags">
+        {t.tags.slice(0, 2).map(tag => <span class="tag">{tag}</span>)}
+      </div>
+    </div>
+    <h3 class="tut-title">{t.title}</h3>
+    <p class="tut-tagline">{t.tagline}</p>
+    {showDescription && <p class="tut-desc">{t.description}</p>}
+    <div class="tut-footer">
+      <span class="tut-lead">{t.leads.join(', ')}</span>
+      <span class="arrow">→</span>
+    </div>
+  </div>
+</a>
+
+<style>
+.tut-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.tut-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.preview-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.35s ease;
+}
+.tut-card:hover .preview-media { transform: scale(1.04); }
+
+.tut-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+  flex: 1;
+}
+
+.tut-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+}
+.tut-num {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--border);
+}
+.tut-tags { display: flex; gap: 0.35rem; }
+.tut-title { font-size: 1.05rem; margin-bottom: 0.1rem; }
+.tut-tagline { font-size: 0.82rem; color: var(--accent); font-weight: 500; line-height: 1.5; }
+.tut-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.6; flex: 1; margin-top: 0.2rem; }
+.tut-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.tut-lead { font-size: 0.78rem; color: var(--muted); }
+.arrow { color: var(--accent); transition: transform 0.15s; }
+.tut-card:hover .arrow { transform: translateX(3px); }
+</style>

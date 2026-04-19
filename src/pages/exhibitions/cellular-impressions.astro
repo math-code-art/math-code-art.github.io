@@ -1,0 +1,315 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { exhibitions } from '../../data/exhibitions';
+import { tutorials } from '../../data/tutorials';
+
+const base = import.meta.env.BASE_URL;
+const exh  = exhibitions.find(e => e.slug === 'cellular-impressions')!;
+const tut  = tutorials.find(t => t.slug === exh.tutorialSlug);
+
+function src(filename: string) {
+  return `${base}exhibitions/cellular-impressions/${filename}`;
+}
+---
+<Layout title={exh.title} description={exh.subtitle}>
+
+  <section class="section-sm page-header">
+    <div class="container narrow">
+      <a href={`${base}exhibitions`} class="back">← Exhibitions</a>
+      <p class="kicker">Math + Code + Art Initiative · UCLA Mathematics · {exh.year}</p>
+      <h1>{exh.title}</h1>
+      <p class="subtitle">{exh.subtitle}</p>
+      <p class="artists">{exh.artists.join(', ')}</p>
+    </div>
+  </section>
+
+  <!-- Artist Statement -->
+  <section class="section statement-section">
+    <div class="container narrow">
+      <p class="label">Artist Statement</p>
+      <div class="statement">
+        {exh.statement.map(para => <p>{para}</p>)}
+      </div>
+    </div>
+  </section>
+
+  <!-- Works -->
+  <section class="section works-section">
+    <div class="container narrow">
+      <p class="label">Works</p>
+      <div class="works-list">
+        {exh.works.map(work => (
+          <div class="work">
+            <div class="work-image img-box">
+              <img src={src(work.src)} alt={work.title} loading="lazy" />
+            </div>
+            <div class="work-meta">
+              <div class="work-info">
+                <h2 class="work-title">{work.title}</h2>
+                <p class="work-year">{work.year}</p>
+                <p class="work-medium">{exh.medium}</p>
+              </div>
+              {(work.portraitSrc || work.styleSrc) && (
+                <div class="work-sources">
+                  {work.portraitSrc && (
+                    <div class="source-thumb">
+                      <img src={src(work.portraitSrc)} alt="Portrait" loading="lazy" />
+                      <span>Portrait</span>
+                    </div>
+                  )}
+                  {work.styleSrc && (
+                    <div class="source-thumb">
+                      <img src={src(work.styleSrc)} alt="Style" loading="lazy" />
+                      <span>Style</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Tutorial callout -->
+  {tut && (
+    <section class="section callout-section">
+      <div class="container narrow">
+        <a href={`${base}tutorials/${tut.slug}`} class="callout">
+          <div>
+            <p class="callout-label">Tutorial</p>
+            <p class="callout-title">{tut.title}</p>
+            <p class="callout-desc">{tut.tagline}</p>
+          </div>
+          <span class="callout-arrow">→</span>
+        </a>
+      </div>
+    </section>
+  )}
+
+  <!-- Lightbox -->
+  <div id="lightbox" aria-hidden="true">
+    <button id="lb-close" aria-label="Close">✕</button>
+    <img id="lb-img" src="" alt="" />
+  </div>
+
+</Layout>
+
+<style>
+.narrow { max-width: 820px; }
+
+/* Header */
+.page-header { border-bottom: 1px solid var(--border); padding-bottom: 2.5rem; }
+.back {
+  display: inline-block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+  transition: color 0.15s;
+}
+.back:hover { color: var(--text); }
+.kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.9rem;
+}
+h1 { margin-bottom: 0.5rem; }
+.subtitle {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+.artists {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Label */
+.label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+}
+
+/* Statement */
+.statement-section { padding-bottom: 0; }
+.statement { display: flex; flex-direction: column; gap: 1.1rem; max-width: 640px; }
+.statement p {
+  font-size: 0.97rem;
+  line-height: 1.85;
+  color: var(--text);
+}
+
+/* Works */
+.works-section { border-top: 1px solid var(--border); }
+.works-list { display: flex; flex-direction: column; gap: 4rem; }
+
+.work {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 2.5rem;
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .work { grid-template-columns: 1fr; }
+}
+
+.work-image {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  aspect-ratio: 4 / 3;
+  cursor: zoom-in;
+}
+.work-image img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  transition: transform 0.35s ease, opacity 0.2s ease;
+}
+.work:hover .work-image img { transform: scale(1.03); opacity: 0.92; }
+
+.work-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-top: 0.25rem;
+}
+.work-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+.work-year {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+.work-medium {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.work-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+.source-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.source-thumb img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--border);
+  display: block;
+}
+.source-thumb span {
+  font-size: 0.68rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+/* Callout */
+.callout-section { border-top: 1px solid var(--border); padding-bottom: 5rem; }
+.callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.75rem;
+  transition: border-color 0.15s;
+}
+.callout:hover { border-color: var(--accent); }
+.callout-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.callout-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.2rem;
+}
+.callout-desc { font-size: 0.82rem; color: var(--muted); }
+.callout-arrow { font-size: 1.2rem; color: var(--accent); transition: transform 0.15s; flex-shrink: 0; }
+.callout:hover .callout-arrow { transform: translateX(4px); }
+
+/* Lightbox */
+#lightbox {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.92);
+  display: flex; align-items: center; justify-content: center;
+  padding: 2rem;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+#lightbox.open { opacity: 1; pointer-events: all; }
+#lb-img {
+  max-width: 100%; max-height: 90vh;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 60px rgba(0,0,0,0.6);
+  transform: scale(0.96);
+  transition: transform 0.2s ease;
+}
+#lightbox.open #lb-img { transform: scale(1); }
+#lb-close {
+  position: absolute; top: 1.25rem; right: 1.5rem;
+  background: none; border: none;
+  color: var(--muted); font-size: 1.4rem;
+  cursor: pointer; line-height: 1;
+  transition: color 0.15s;
+}
+#lb-close:hover { color: var(--text); }
+</style>
+
+<script>
+const lb    = document.getElementById('lightbox')!;
+const lbImg = document.getElementById('lb-img') as HTMLImageElement;
+
+function openLightbox(src: string, alt: string) {
+  lbImg.src = src; lbImg.alt = alt;
+  lb.classList.add('open');
+  lb.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  lb.classList.remove('open');
+  lb.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+
+document.querySelectorAll<HTMLElement>('.img-box').forEach(box => {
+  box.addEventListener('click', () => {
+    const img = box.querySelector('img')!;
+    openLightbox(img.src, img.alt);
+  });
+});
+
+document.getElementById('lb-close')!.addEventListener('click', closeLightbox);
+lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+</script>

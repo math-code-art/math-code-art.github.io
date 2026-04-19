@@ -1,0 +1,319 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { tutorials } from '../data/tutorials';
+const base = import.meta.env.BASE_URL;
+
+// Resolve "local:filename" to a full URL; pass through https:// URLs unchanged.
+function resolveSrc(src: string): string {
+  return src.startsWith('local:')
+    ? `${base}gallery/${src.slice(6)}`
+    : src;
+}
+
+// Derive gallery sections from tutorial data; skip tutorials with no gallery items.
+// Precompute layout flags here to avoid Astro JSX parser misreading `<` as JSX tags.
+const enriched = tutorials
+  .filter(t => t.gallery.length > 0)
+  .map(t => {
+    const items = t.gallery.map(g => ({ ...g, src: resolveSrc(g.src) }));
+    const n = items.length;
+    const allVideos = items.every(i => i.kind === 'video');
+    const gridClass = n === 1 ? 'grid-featured' : (allVideos || n === 2) ? 'grid-2up' : 'grid-3up';
+    const rowSize   = gridClass === 'grid-2up' ? 2 : 3;
+    const carousel  = n > rowSize;
+    const perView   = rowSize;
+    return { slug: t.slug, title: t.title, items, carousel, perView, gridClass };
+  });
+---
+<Layout title="Gallery">
+
+  <section class="section-sm page-header">
+    <div class="container">
+      <h1>Gallery</h1>
+      <p>Sample outputs from each tutorial.</p>
+    </div>
+  </section>
+
+  <div class="container gallery-body">
+    {enriched.map((sec, si) => (
+      <section class="gallery-section">
+        <div class="sec-header">
+          <h2>{sec.title}</h2>
+          <div class="sec-right">
+            {sec.carousel && (
+              <div class="c-arrows" data-si={si}>
+                <button class="c-btn" data-dir="-1" aria-label="Previous">←</button>
+                <button class="c-btn" data-dir="1"  aria-label="Next">→</button>
+              </div>
+            )}
+            <a href={`${base}tutorials/${sec.slug}`} class="sec-link">Tutorial →</a>
+          </div>
+        </div>
+
+        {sec.carousel ? (
+          <div class="carousel-outer">
+            <div class="carousel" data-carousel={si} style={`--per-view:${sec.perView}`}>
+              {sec.items.map(item => (
+                <div class="c-item">
+                  {item.kind === 'video' ? (
+                    <div class="media-box video-box">
+                      <video src={item.src} controls loop playsinline></video>
+                    </div>
+                  ) : (
+                    <div class="media-box img-box">
+                      <img src={item.src} alt={item.caption ?? ''} loading="lazy" />
+                    </div>
+                  )}
+                  {item.caption && <p class="caption">{item.caption}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div class={`item-grid ${sec.gridClass}`}>
+            {sec.items.map(item => (
+              <div class="item">
+                {item.kind === 'video' ? (
+                  <div class="media-box video-box">
+                    <video src={item.src} controls loop playsinline></video>
+                  </div>
+                ) : (
+                  <div class="media-box img-box">
+                    <img src={item.src} alt={item.caption ?? ''} loading="lazy" />
+                  </div>
+                )}
+                {item.caption && <p class="caption">{item.caption}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    ))}
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" aria-hidden="true">
+    <button id="lb-close" aria-label="Close">✕</button>
+    <img id="lb-img" src="" alt="" />
+  </div>
+
+</Layout>
+
+<style>
+/* ── Page header ── */
+.page-header { border-bottom: 1px solid var(--border); padding-bottom: 2rem; }
+.page-header h1 { margin-bottom: 0.4rem; }
+
+/* ── Gallery body ── */
+.gallery-body {
+  padding-top: 3.5rem;
+  padding-bottom: 6rem;
+}
+.gallery-section {
+  padding: 3rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.gallery-section:last-child { border-bottom: none; }
+
+/* ── Section header ── */
+.sec-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  gap: 1rem;
+}
+.sec-header h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.sec-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.sec-link {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.sec-link:hover { color: var(--accent); }
+
+/* ── Carousel arrows ── */
+.c-arrows { display: flex; gap: 0.5rem; }
+.c-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+.c-btn:hover { background: var(--accent); color: #08080e; }
+.c-btn:disabled { opacity: 0.2; cursor: default; border-color: var(--border); color: var(--muted); background: transparent; }
+
+/* ── Carousel track ── */
+.carousel-outer { overflow: hidden; }
+.carousel {
+  display: flex;
+  gap: 0.875rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.carousel::-webkit-scrollbar { display: none; }
+
+.c-item {
+  flex: 0 0 calc((100% - (var(--per-view) - 1) * 0.875rem) / var(--per-view));
+  scroll-snap-align: start;
+}
+
+/* ── Plain grids ── */
+.item-grid { display: grid; gap: 0.875rem; }
+.grid-featured { grid-template-columns: 1fr; max-width: 740px; }
+.grid-2up      { grid-template-columns: repeat(2, 1fr); }
+.grid-3up      { grid-template-columns: repeat(3, 1fr); }
+
+@media (max-width: 700px) {
+  .grid-3up { grid-template-columns: repeat(2, 1fr); }
+  .c-item   { flex-basis: calc((100% - 0.875rem) / 2); }
+}
+@media (max-width: 480px) {
+  .grid-2up, .grid-3up { grid-template-columns: 1fr; }
+  .c-item { flex-basis: 85%; }
+}
+
+/* ── Media boxes ── */
+.media-box {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.video-box { aspect-ratio: 16 / 9; background: #000; }
+.video-box video { width: 100%; height: 100%; display: block; object-fit: contain; }
+.img-box { aspect-ratio: 4 / 3; cursor: zoom-in; }
+.img-box img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  transition: transform 0.35s ease, opacity 0.2s ease;
+}
+.item:hover .img-box img,
+.c-item:hover .img-box img { transform: scale(1.04); opacity: 0.92; }
+
+/* ── Lightbox ── */
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+#lightbox.open {
+  opacity: 1;
+  pointer-events: all;
+}
+#lb-img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 60px rgba(0,0,0,0.6);
+  transform: scale(0.96);
+  transition: transform 0.2s ease;
+}
+#lightbox.open #lb-img { transform: scale(1); }
+#lb-close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.15s;
+}
+#lb-close:hover { color: var(--text); }
+
+/* ── Caption ── */
+.caption {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.4rem;
+  line-height: 1.4;
+}
+</style>
+
+<script>
+// Wire up carousel arrow buttons
+document.querySelectorAll<HTMLElement>('.c-arrows').forEach(arrows => {
+  const si = arrows.dataset.si!;
+  const rail = document.querySelector<HTMLElement>(`[data-carousel="${si}"]`)!;
+  const btns = arrows.querySelectorAll<HTMLButtonElement>('.c-btn');
+
+  function update() {
+    const atStart = rail.scrollLeft <= 4;
+    const atEnd   = rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 4;
+    btns[0].disabled = atStart;
+    btns[1].disabled = atEnd;
+  }
+
+  arrows.addEventListener('click', e => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.c-btn');
+    if (!btn) return;
+    const dir = parseInt(btn.dataset.dir!);
+    const itemW = (rail.firstElementChild as HTMLElement).offsetWidth + 14;
+    rail.scrollBy({ left: dir * itemW, behavior: 'smooth' });
+  });
+
+  rail.addEventListener('scroll', update, { passive: true });
+  update();
+});
+
+// Lightbox
+const lb    = document.getElementById('lightbox')!;
+const lbImg = document.getElementById('lb-img') as HTMLImageElement;
+
+function openLightbox(src: string, alt: string) {
+  lbImg.src = src;
+  lbImg.alt = alt;
+  lb.classList.add('open');
+  lb.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  lb.classList.remove('open');
+  lb.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+
+document.querySelectorAll<HTMLElement>('.img-box').forEach(box => {
+  box.addEventListener('click', () => {
+    const img = box.querySelector('img')!;
+    openLightbox(img.src, img.alt);
+  });
+});
+
+document.getElementById('lb-close')!.addEventListener('click', closeLightbox);
+lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+</script>

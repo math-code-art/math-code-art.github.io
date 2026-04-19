@@ -1,0 +1,129 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { advisors, developers } from '../data/team';
+---
+<Layout title="Team">
+
+  <section class="section-sm page-header">
+    <div class="container">
+      <h1>Team</h1>
+      <p>Tutorials developed by students, advised by faculty at UCLA Mathematics and Computer Science.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top: 2rem">
+    <div class="container">
+
+      <h2 class="group-label">Tutorial developers</h2>
+      <div class="grid-3" style="margin-bottom: 3rem">
+        {developers.map(p => {
+          const initials = p.name.split(' ').filter((n: string) => !n.endsWith('.')).map((n: string) => n[0]).slice(0,2).join('');
+          return (
+            <div class="person-card">
+              {p.url
+                ? (
+                  <a href={p.url} target="_blank" rel="noopener noreferrer" class="avatar-link">
+                    {p.photo
+                      ? <div class="avatar avatar-photo"><img src={p.photo} alt={p.name} /></div>
+                      : <div class="avatar developer">{initials}</div>
+                    }
+                  </a>
+                ) : (
+                  p.photo
+                    ? <div class="avatar avatar-photo"><img src={p.photo} alt={p.name} /></div>
+                    : <div class="avatar developer">{initials}</div>
+                )
+              }
+              {p.url
+                ? <h3><a href={p.url} target="_blank" rel="noopener noreferrer" class="name-link">{p.name}</a></h3>
+                : <h3>{p.name}</h3>
+              }
+              <p class="affil">{p.affiliation}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <h2 class="group-label">Faculty advisors</h2>
+      <div class="grid-3">
+        {advisors.map(p => {
+          const initials = p.name.split(' ').filter((n: string) => !n.endsWith('.')).map((n: string) => n[0]).slice(0,2).join('');
+          return (
+            <div class="person-card">
+              {p.url
+                ? (
+                  <a href={p.url} target="_blank" rel="noopener noreferrer" class="avatar-link">
+                    {p.photo
+                      ? <div class="avatar avatar-photo"><img src={p.photo} alt={p.name} /></div>
+                      : <div class="avatar advisor">{initials}</div>
+                    }
+                  </a>
+                ) : (
+                  p.photo
+                    ? <div class="avatar avatar-photo"><img src={p.photo} alt={p.name} /></div>
+                    : <div class="avatar advisor">{initials}</div>
+                )
+              }
+              {p.url
+                ? <h3><a href={p.url} target="_blank" rel="noopener noreferrer" class="name-link">{p.name}</a></h3>
+                : <h3>{p.name}</h3>
+              }
+              <p class="affil">{p.affiliation}</p>
+            </div>
+          );
+        })}
+      </div>
+
+    </div>
+  </section>
+
+</Layout>
+
+<style>
+.page-header { border-bottom: 1px solid var(--border); padding-bottom: 2rem; }
+.page-header h1 { margin-bottom: 0.4rem; }
+
+.group-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1.1rem;
+}
+
+.person-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  transition: border-color 0.2s;
+}
+.person-card:hover { border-color: rgba(167,139,250,0.35); }
+
+.avatar {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.4rem;
+  margin-bottom: 0.9rem;
+  color: #08080e;
+}
+.avatar.advisor   { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+.avatar.developer { background: linear-gradient(135deg, #34d399, #60a5fa); }
+.avatar-photo { background: none; overflow: hidden; }
+.avatar-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.person-card h3 { font-size: 0.95rem; }
+.affil { font-size: 0.8rem; color: var(--muted); }
+.avatar-link { display: block; border-radius: 50%; }
+.name-link { color: inherit; transition: color 0.15s; }
+.name-link:hover { color: var(--accent); }
+</style>

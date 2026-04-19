@@ -1,0 +1,158 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'Tutorials on mathematics, programming, and visual art — UCLA Mathematics.' } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content={description} />
+  <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <title>{title === 'Home' ? 'Math + Code + Art' : `${title} — Math + Code + Art`}</title>
+</head>
+<body>
+  <header class="nav-wrap">
+    <nav class="container nav-inner">
+      <a href={base} class="nav-logo grad">Math+Code+Art</a>
+      <ul class="nav-links">
+        <li><a href={`${base}about`}>About</a></li>
+        <li><a href={`${base}tutorials`}>Tutorials</a></li>
+        <li><a href={`${base}exhibitions`}>Exhibitions</a></li>
+        <li><a href={`${base}news`}>News</a></li>
+        <li><a href={`${base}team`}>Team</a></li>
+      </ul>
+      <button class="nav-toggle" aria-label="Open menu" onclick="this.closest('nav').classList.toggle('open')">
+        <span></span><span></span><span></span>
+      </button>
+    </nav>
+  </header>
+
+  <main><slot /></main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span class="grad footer-name">Math + Code + Art</span>
+      <span class="footer-sep">·</span>
+      <span>UCLA Mathematics</span>
+      <ul class="footer-links">
+        <li><a href={`${base}about`}>About</a></li>
+        <li><a href={`${base}tutorials`}>Tutorials</a></li>
+        <li><a href={`${base}exhibitions`}>Exhibitions</a></li>
+        <li><a href={`${base}news`}>News</a></li>
+        <li><a href={`${base}team`}>Team</a></li>
+        <li><a href="https://github.com/jiayinlu19960224/Math-Code-Art" target="_blank" rel="noopener">GitHub</a></li>
+      </ul>
+    </div>
+  </footer>
+</body>
+</html>
+
+<style>
+/* ── Nav ── */
+.nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--nav-h);
+  background: rgba(8,8,14,0.88);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+}
+.nav-logo {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.nav-links {
+  display: flex;
+  gap: 1.75rem;
+}
+.nav-links a {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+  transition: color 0.15s;
+}
+.nav-links a:hover { color: var(--text); }
+
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+}
+.nav-toggle span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+}
+
+@media (max-width: 580px) {
+  .nav-toggle { display: flex; }
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: var(--nav-h);
+    left: 0; right: 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    flex-direction: column;
+    padding: 1.25rem 1.5rem;
+    gap: 1.1rem;
+  }
+  nav.open .nav-links { display: flex; }
+}
+
+/* ── Footer ── */
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem 0;
+  margin-top: 4rem;
+}
+.footer-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.footer-name { font-weight: 700; font-size: 0.9rem; }
+.footer-sep  { color: var(--border); }
+.footer-inner > span:last-of-type { font-size: 0.85rem; color: var(--muted); }
+.footer-links {
+  display: flex;
+  gap: 1.25rem;
+  margin-left: auto;
+}
+.footer-links a {
+  font-size: 0.82rem;
+  color: var(--muted);
+  transition: color 0.15s;
+}
+.footer-links a:hover { color: var(--text); }
+
+@media (max-width: 580px) {
+  .footer-links { margin-left: 0; margin-top: 0.5rem; width: 100%; }
+}
+</style>

@@ -1,0 +1,320 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { news } from '../data/news';
+
+const typeColors: Record<string, string> = {
+  Talk:         'tag-talk',
+  Exhibition:   'tag-exhibition',
+  Publication:  'tag-publication',
+  'New Tutorial': 'tag-tutorial',
+};
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+---
+<Layout title="News">
+
+  <section class="section-sm page-header">
+    <div class="container">
+      <h1>News</h1>
+      <p>Talks, exhibitions, and updates from the initiative.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top: 2rem; padding-bottom: 6rem">
+    <div class="container">
+      <div class="news-list">
+        {news.map(item => (
+          <div class="news-item">
+            {item.imageSrc && (
+              <button class="news-img" onclick={`openFlyer('${item.imageSrc}')`} aria-label="View flyer full size">
+                <img src={item.imageSrc} alt={`${item.title} flyer`} loading="lazy" />
+                <span class="zoom-hint">Click to enlarge</span>
+              </button>
+            )}
+            <div class="news-body">
+              <div class="news-meta">
+                <span class={`tag ${typeColors[item.type] ?? ''}`}>{item.type}</span>
+                <time class="news-date">{formatDate(item.date)}</time>
+              </div>
+              <h2 class="news-title">{item.title}</h2>
+              <p class="news-desc">{item.description}</p>
+              {item.photoSrc && (
+                <div class="news-photo">
+                  <img src={item.photoSrc} alt={`${item.title} — speaker photo`} loading="lazy" />
+                </div>
+              )}
+              <div class="news-actions">
+                {item.link && (
+                  <a href={item.link} class="news-link" {...(item.link.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+                    {item.linkLabel ?? 'Learn more'} →
+                  </a>
+                )}
+                {item.slidesEmbedUrl && (
+                  <button
+                    class="news-link slides-link"
+                    onclick={`openSlides('${item.slidesEmbedUrl}','${item.slidesDownloadUrl ?? ''}')`}
+                  >
+                    Slides →
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Flyer lightbox -->
+  <div id="flyer-lb" class="lb-overlay" onclick="closeLightbox('flyer-lb')">
+    <button class="lb-close" onclick="closeLightbox('flyer-lb')" aria-label="Close">✕</button>
+    <img id="flyer-img" src="" alt="Full size flyer" />
+  </div>
+
+  <!-- Slides modal -->
+  <div id="slides-modal" class="slides-overlay" onclick="if(event.target===this)closeSlides()">
+    <div class="slides-dialog">
+      <div class="slides-header">
+        <span class="slides-title">Slides</span>
+        <div class="slides-header-actions">
+          <a id="slides-dl" href="" download class="btn btn-primary btn-sm" style="display:none">Download PDF</a>
+          <button class="lb-close" onclick="closeSlides()" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="slides-frame-wrap">
+        <iframe id="slides-frame" src="" frameborder="0" allowfullscreen title="Slides preview"></iframe>
+      </div>
+    </div>
+  </div>
+
+</Layout>
+
+<script>
+  function openFlyer(src: string) {
+    const lb = document.getElementById('flyer-lb')!;
+    (document.getElementById('flyer-img') as HTMLImageElement).src = src;
+    lb.classList.add('open');
+  }
+  function closeLightbox(id: string) {
+    document.getElementById(id)!.classList.remove('open');
+  }
+  function openSlides(embedUrl: string, downloadUrl: string) {
+    const modal = document.getElementById('slides-modal')!;
+    const frame = document.getElementById('slides-frame') as HTMLIFrameElement;
+    const dl = document.getElementById('slides-dl') as HTMLAnchorElement;
+    frame.src = embedUrl;
+    if (downloadUrl) {
+      dl.href = downloadUrl;
+      dl.style.display = '';
+    } else {
+      dl.style.display = 'none';
+    }
+    modal.classList.add('open');
+  }
+  function closeSlides() {
+    const modal = document.getElementById('slides-modal')!;
+    modal.classList.remove('open');
+    (document.getElementById('slides-frame') as HTMLIFrameElement).src = '';
+  }
+  // Expose to inline onclick
+  (window as any).openFlyer = openFlyer;
+  (window as any).openSlides = openSlides;
+  (window as any).closeSlides = closeSlides;
+  (window as any).closeLightbox = closeLightbox;
+</script>
+
+<style>
+.page-header { border-bottom: 1px solid var(--border); padding-bottom: 2rem; }
+.page-header h1 { margin-bottom: 0.4rem; }
+
+.news-list { display: flex; flex-direction: column; max-width: 720px; }
+
+.news-item {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 2rem;
+  padding: 2rem 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+.news-item:last-child { border-bottom: none; }
+.news-item:not(:has(.news-img)) { grid-template-columns: 1fr; }
+
+.news-img {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: zoom-in;
+  padding: 0;
+  display: block;
+  width: 100%;
+}
+.news-img img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  transition: transform 0.2s;
+}
+.news-img:hover img { transform: scale(1.03); }
+.zoom-hint {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 0.7rem;
+  text-align: center;
+  padding: 0.3rem 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.news-img:hover .zoom-hint { opacity: 1; }
+
+@media (max-width: 600px) {
+  .news-item { grid-template-columns: 1fr; }
+  .news-img { aspect-ratio: 3 / 4; max-width: 300px; }
+}
+
+.news-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+.news-date { font-size: 0.78rem; color: var(--muted); }
+
+.tag-talk        { background: rgba(167,139,250,0.12); color: #a78bfa; }
+.tag-exhibition  { background: rgba(244,114,182,0.12); color: #f472b6; }
+.tag-publication { background: rgba(52,211,153,0.12);  color: #34d399; }
+.tag-tutorial    { background: rgba(251,191,36,0.12);  color: #fbbf24; }
+
+.news-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+.news-desc  { font-size: 0.9rem; color: var(--muted); line-height: 1.7; margin-bottom: 0.75rem; }
+
+.news-photo {
+  width: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin-bottom: 0.85rem;
+}
+.news-photo img { width: 100%; height: auto; display: block; }
+
+.news-actions { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: center; }
+.news-link {
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 500;
+  transition: opacity 0.15s;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.news-link:hover { opacity: 0.75; }
+.slides-link { color: var(--muted); }
+.slides-link:hover { color: var(--text); opacity: 1; }
+
+/* ── Flyer lightbox ── */
+.lb-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.85);
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+.lb-overlay.open { display: flex; }
+.lb-overlay > img {
+  max-width: min(90vw, 680px);
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 48px rgba(0,0,0,0.6);
+}
+.lb-close {
+  position: absolute;
+  top: 1.25rem; right: 1.5rem;
+  background: none; border: none;
+  color: #fff; font-size: 1.4rem;
+  cursor: pointer; line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+.lb-close:hover { opacity: 1; }
+
+/* ── Slides modal ── */
+.slides-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.75);
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.slides-overlay.open { display: flex; }
+
+.slides-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 16px 64px rgba(0,0,0,0.6);
+}
+
+.slides-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.slides-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.slides-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.slides-header .lb-close {
+  position: static;
+  color: var(--muted);
+  font-size: 1.1rem;
+  opacity: 1;
+}
+.slides-header .lb-close:hover { color: var(--text); }
+
+.btn-sm {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.85rem;
+}
+
+.slides-frame-wrap {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+}
+.slides-frame-wrap iframe {
+  width: 100%; height: 100%;
+  display: block;
+  border: none;
+}
+</style>
