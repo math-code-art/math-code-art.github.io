@@ -18,10 +18,11 @@ export const advisors: Person[] = [
 
 export const developers: Person[] = [
   { name: 'Shanmei Wanyan', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/shanmei-wanyan.jpg'},
-  { name: 'Hanyin Coco Zhang', role: 'Tutorial Developer', affiliation: 'UCLA' },
+  { name: 'Hanyin (Coco) Zhang', role: 'Tutorial Developer', affiliation: 'UCLA' },
   { name: 'Junhao Jia', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/junhao-jia.jpg', url: 'https://rukaatre1.github.io/Harley-Studio/' },
   { name: 'Weimo Zhu', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/weimo-zhu.JPG' },
   { name: 'Tucker Nielson', role: 'Tutorial Developer', affiliation: 'The Rivers School, Weston MA' },
   { name: 'Meichen Wan', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/meichen-wan.png', url: 'https://meichenwan0704.wixsite.com/eportfolio'},
-  { name: 'Dengyuhan Dai', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/dengyuhan-dai.jpg', url: 'https://github.com/TomoriNa0'},
+  { name: 'Dengyuhan Dai', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/dengyuhan-dai.jpg', url: 'https://tomorina0.github.io/'},
+  { name: 'Qiyang (Rosalinda) Chen', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/qiyang-chen.jpg', url: 'https://rosiechen1005.github.io/'},
 ];
