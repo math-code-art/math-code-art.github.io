@@ -12,7 +12,6 @@ export const advisors: Person[] = [
   { name: 'Dr. Yue Sun', role: 'Faculty Advisor', affiliation: 'University of Wisconsin-Madison', photo: '/team/yue-sun.png', url: 'http://sun-yue.com/' },
   { name: 'Wanxi Yang', role: 'Faculty Advisor', affiliation: 'Independent' },
   { name: 'Yumeng He', role: 'Faculty Advisor', affiliation: 'UCLA Computer Science', photo: '/team/yumeng-he.JPG', url: 'https://heyumeng.com/' },
-  { name: 'Prof. Michael Andrews', role: 'Faculty Advisor', affiliation: 'UCLA Mathematics', photo: '/team/michael-andrews.png', url: 'https://www.math.ucla.edu/~mjandr/' },
   { name: 'Prof. Chenfanfu Jiang', role: 'Faculty Advisor', affiliation: 'UCLA Mathematics', photo: '/team/chenfanfu-jiang.png', url: 'https://www.math.ucla.edu/~cffjiang/' },
 ];
 

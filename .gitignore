@@ -4,11 +4,26 @@ dist/
 # Dependencies
 node_modules/
 
+# Astro generated cache
+.astro/
+
+# Local Claude Code / agent tooling — not for version control
+.agents/
+skills-lock.json
+
 # macOS
 .DS_Store
+**/.DS_Store
+
+# Windows
+Thumbs.db
 
 # Microsoft Office temp files
 ~$*
+
+# Logs
+*.log
+npm-debug.log*
 
 # Environment
 .env

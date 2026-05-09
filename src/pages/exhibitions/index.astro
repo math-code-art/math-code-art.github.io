@@ -42,6 +42,7 @@ function coverUrl(e: typeof exhibitions[number]) {
 <style>
 .page-header { border-bottom: 1px solid var(--border); padding-bottom: 2rem; }
 .page-header h1 { margin-bottom: 0.4rem; }
+.page-header p { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
 
 .exh-list { display: flex; flex-direction: column; gap: 1rem; max-width: 760px; }
 
@@ -78,10 +79,11 @@ function coverUrl(e: typeof exhibitions[number]) {
   gap: 0.3rem;
 }
 .exh-year {
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
   letter-spacing: 0.08em;
-  color: var(--border);
+  color: var(--accent);
   margin-bottom: 0.1rem;
 }
 .exh-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.1rem; }

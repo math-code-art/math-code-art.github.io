@@ -12,7 +12,7 @@ export interface Exhibition {
   subtitle: string;
   artists: string[];
   year: number;
-  tutorialSlug: string;
+  tutorialSlug?: string;
   coverSrc: string;      // filename inside public/exhibitions/{slug}/
   statement: string[];   // paragraphs
   medium: string;
@@ -156,5 +156,20 @@ export const exhibitions: Exhibition[] = [
         styleSrc: 'in-the-field-2-style.jpg',
       },
     ],
+  },
+  {
+    slug: 'paper-marbling',
+    title: 'Paper Marbling',
+    subtitle: 'Where Historical Craft Meets Contemporary Computation',
+    artists: ['Math+Code+Art Initiative'],
+    year: 2026,
+    coverSrc: 'cover.jpg',
+    statement: [
+      'Paper marbling is one of the oldest decorative arts, producing swirling, fluid patterns by floating pigments on water and transferring them to paper. This exhibition places hand-made marbled papers in direct dialogue with digitally generated marbling, asking what is preserved and what is lost as a physical craft becomes a computational process.',
+      'The digital works are produced through fluid simulation, pattern design algorithms, and interactive parameter exploration. By varying viscosity, flow velocity, and pigment interaction rules, the algorithm generates marbled patterns that echo the organic unpredictability of the physical medium — yet can be reproduced, transformed, and animated in ways the craft cannot.',
+      'Displayed side by side, physical and digital works reveal how mathematics and art can describe the same flowing phenomena across fundamentally different media. The exhibition invites viewers to look for the shared language of pattern and structure beneath the surface of each piece.',
+    ],
+    medium: 'Hand-made marbled paper and digital print. Fluid simulation, pattern design algorithms.',
+    works: [],
   },
 ];

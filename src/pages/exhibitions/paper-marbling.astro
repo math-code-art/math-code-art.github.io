@@ -1,14 +1,12 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { exhibitions } from '../../data/exhibitions';
-import { tutorials } from '../../data/tutorials';
 
 const base = import.meta.env.BASE_URL;
-const exh  = exhibitions.find(e => e.slug === 'cellular-impressions')!;
-const tut  = tutorials.find(t => t.slug === exh.tutorialSlug);
+const exh  = exhibitions.find(e => e.slug === 'paper-marbling')!;
 
 function src(filename: string) {
-  return `${base}exhibitions/cellular-impressions/${filename}`;
+  return `${base}exhibitions/paper-marbling/${filename}`;
 }
 ---
 <Layout title={exh.title} description={exh.subtitle}>
@@ -26,67 +24,49 @@ function src(filename: string) {
   <!-- Artist Statement -->
   <section class="section statement-section">
     <div class="container narrow">
-      <p class="label">Artist Statement</p>
+      <p class="label">Exhibition Statement</p>
       <div class="statement">
         {exh.statement.map(para => <p>{para}</p>)}
       </div>
     </div>
   </section>
 
-  <!-- Works -->
-  <section class="section works-section">
-    <div class="container narrow">
-      <p class="label">Works</p>
-      <div class="works-list">
-        {exh.works.map(work => (
-          <div class="work">
-            <div class="work-image img-box">
-              <img src={src(work.src)} alt={work.title} loading="lazy" />
-            </div>
-            <div class="work-meta">
-              <div class="work-info">
-                <h2 class="work-title">{work.title}</h2>
-                <p class="work-year">{work.year}</p>
-                <p class="work-medium">{exh.medium}</p>
-              </div>
-              {(work.portraitSrc || work.styleSrc) && (
-                <div class="work-sources">
-                  {work.portraitSrc && (
-                    <div class="source-thumb">
-                      <img src={src(work.portraitSrc)} alt="Portrait" loading="lazy" />
-                      <span>Portrait</span>
-                    </div>
-                  )}
-                  {work.styleSrc && (
-                    <div class="source-thumb">
-                      <img src={src(work.styleSrc)} alt="Style" loading="lazy" />
-                      <span>Style</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <!-- Tutorial callout -->
-  {tut && (
-    <section class="section callout-section">
+  <!-- Works (populated when images are available) -->
+  {exh.works.length > 0 && (
+    <section class="section works-section">
       <div class="container narrow">
-        <a href={`${base}tutorials/${tut.slug}`} class="callout">
-          <div>
-            <p class="callout-label">Tutorial</p>
-            <p class="callout-title">{tut.title}</p>
-            <p class="callout-desc">{tut.tagline}</p>
-          </div>
-          <span class="callout-arrow">→</span>
-        </a>
+        <p class="label">Works</p>
+        <div class="works-grid">
+          {exh.works.map(work => (
+            <div class="work-item img-box">
+              <img src={src(work.src)} alt={work.title} loading="lazy" />
+              <p class="work-caption">{work.title} · {work.year}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )}
+
+  <!-- Placeholder when no images yet -->
+  {exh.works.length === 0 && (
+    <section class="section placeholder-section">
+      <div class="container narrow">
+        <div class="placeholder-box">
+          <p class="placeholder-label">// works coming soon</p>
+          <p>Exhibition images will appear here once uploaded to <code>public/exhibitions/paper-marbling/</code>.</p>
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- Medium note -->
+  <section class="section medium-section">
+    <div class="container narrow">
+      <p class="label">Medium</p>
+      <p class="medium-text">{exh.medium}</p>
+    </div>
+  </section>
 
   <!-- Lightbox -->
   <div id="lightbox" aria-hidden="true">
@@ -98,7 +78,6 @@ function src(filename: string) {
 
 <style>
 /* ── Exhibition Catalogue aesthetic — dark warm sepia ── */
-/* No dot-grid. Warm dark ground, parchment text, gold accent. */
 :global(body) {
   background-color: #110e0a;
   background-image: none;
@@ -115,7 +94,6 @@ function src(filename: string) {
 :global(.footer-name, .footer-sub, .footer-links a) { color: #8a7a6a !important; }
 :global(.footer-links a:hover) { color: #c9a96e !important; background: transparent !important; }
 
-/* Catalogue variables for this page */
 --cat-bg:     #110e0a;
 --cat-ink:    #f0e8d8;
 --cat-muted:  #8a7a6a;
@@ -142,7 +120,6 @@ function src(filename: string) {
 .kicker {
   font-family: var(--font-mono);
   font-size: 0.68rem;
-  font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--cat-muted);
@@ -161,7 +138,6 @@ h1 {
   font-size: 1.05rem;
   color: var(--cat-muted);
   font-style: italic;
-  font-weight: 400;
   margin-bottom: 0.6rem;
 }
 .artists {
@@ -171,7 +147,7 @@ h1 {
   letter-spacing: 0.04em;
 }
 
-/* Section labels */
+/* Labels */
 .label {
   font-family: var(--font-mono);
   font-size: 0.65rem;
@@ -194,124 +170,72 @@ h1 {
   font-weight: 300;
 }
 
-/* Works */
+/* Works grid */
 .works-section { border-top: 1px solid var(--cat-border); }
-.works-list { display: flex; flex-direction: column; gap: 5rem; }
-
-.work {
+.works-grid {
   display: grid;
-  grid-template-columns: 1fr 200px;
-  gap: 2.5rem;
-  align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
 }
-@media (max-width: 640px) {
-  .work { grid-template-columns: 1fr; }
-}
-
-.work-image {
-  border-radius: 2px;
+.work-item { display: flex; flex-direction: column; gap: 0.5rem; }
+.img-box {
+  aspect-ratio: 3 / 4;
   overflow: hidden;
+  border-radius: 2px;
   border: 1px solid var(--cat-border);
   background: #1e1a14;
-  aspect-ratio: 4 / 3;
   cursor: zoom-in;
 }
-.work-image img {
+.img-box img {
   width: 100%; height: 100%;
   object-fit: cover; display: block;
-  transition: transform 0.5s var(--ease-out), opacity 0.3s ease;
+  transition: transform 0.5s var(--ease-out);
 }
-.work:hover .work-image img { transform: scale(1.02); opacity: 0.94; }
-
-.work-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding-top: 0.25rem;
-}
-.work-title {
-  font-family: var(--font-serif);
-  font-size: 1.15rem;
-  font-weight: 400;
-  color: var(--cat-ink);
-  margin-bottom: 0.3rem;
-  line-height: 1.3;
-}
-.work-year {
+.img-box:hover img { transform: scale(1.03); }
+.work-caption {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   color: var(--cat-muted);
-  margin-bottom: 0.6rem;
   letter-spacing: 0.04em;
 }
-.work-medium {
-  font-size: 0.82rem;
-  color: var(--cat-muted);
-  line-height: 1.65;
-  font-style: italic;
-}
 
-.work-sources {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--cat-border);
-}
-.source-thumb { display: flex; flex-direction: column; gap: 0.3rem; }
-.source-thumb img {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  border-radius: 2px;
-  border: 1px solid var(--cat-border);
-  display: block;
-}
-.source-thumb span {
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  color: var(--cat-muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-/* Callout */
-.callout-section { border-top: 1px solid var(--cat-border); padding-bottom: 5rem; }
-.callout {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+/* Placeholder */
+.placeholder-section { border-top: 1px solid var(--cat-border); padding-bottom: 0; }
+.placeholder-box {
   background: #1a1510;
   border: 1px solid var(--cat-border);
   border-radius: 2px;
-  padding: 1.5rem 2rem;
-  transition: border-color 0.15s;
+  padding: 2rem;
+  max-width: 480px;
 }
-.callout:hover { border-color: var(--cat-accent); }
-.callout-label {
+.placeholder-label {
   font-family: var(--font-mono);
-  font-size: 0.65rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cat-muted);
-  margin-bottom: 0.4rem;
-}
-.callout-title {
-  font-family: var(--font-serif);
-  font-size: 1.1rem;
-  font-weight: 400;
-  color: var(--cat-ink);
-  margin-bottom: 0.2rem;
-}
-.callout-desc { font-size: 0.83rem; color: var(--cat-muted); }
-.callout-arrow {
-  font-size: 1.2rem;
+  font-size: 0.75rem;
   color: var(--cat-accent);
-  transition: transform 0.15s;
-  flex-shrink: 0;
+  margin-bottom: 0.75rem;
 }
-.callout:hover .callout-arrow { transform: translateX(4px); }
+.placeholder-box p {
+  font-size: 0.88rem;
+  color: var(--cat-muted);
+  line-height: 1.7;
+}
+.placeholder-box code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: rgba(0,0,0,0.06);
+  padding: 0.1em 0.3em;
+  border-radius: 2px;
+}
+
+/* Medium */
+.medium-section { border-top: 1px solid var(--cat-border); padding-bottom: 5rem; }
+.medium-text {
+  font-size: 0.9rem;
+  color: var(--cat-muted);
+  font-style: italic;
+  line-height: 1.7;
+  max-width: 480px;
+}
 
 /* Lightbox */
 #lightbox {
@@ -361,7 +285,7 @@ function closeLightbox() {
 document.querySelectorAll<HTMLElement>('.img-box').forEach(box => {
   box.addEventListener('click', () => {
     const img = box.querySelector('img')!;
-    openLightbox(img.src, img.alt);
+    if (img) openLightbox(img.src, img.alt);
   });
 });
 

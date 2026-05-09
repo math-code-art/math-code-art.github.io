@@ -19,24 +19,70 @@ const typeColors: Record<string, string> = {
 
   <section class="hero">
     <div class="container">
-      <p class="kicker">UCLA Mathematics</p>
-      <h1>Math + Code + Art</h1>
-      <p class="hero-desc">
-        Nine tutorials connecting mathematical ideas to visual and audio output,
-        each written as a Jupyter notebook with explanation and runnable code.
-      </p>
-      <div class="hero-btns">
-        <a href={`${base}tutorials`} class="btn btn-primary">Browse tutorials</a>
-        <a href={`${base}about`} class="btn btn-ghost">About</a>
+      <div class="hero-inner">
+        <div class="hero-content fade-up">
+          <p class="hero-kicker"><span class="kicker-dot"></span>UCLA Mathematics Initiative</p>
+          <h1>Math<span class="grad">+</span>Code<span class="grad">+</span>Art</h1>
+          <p class="hero-desc">
+            An open initiative connecting mathematical ideas to visual and audio output —
+            through tutorials, exhibitions, and research.
+          </p>
+          <div class="hero-btns">
+            <a href={`${base}tutorials`} class="btn btn-primary">Browse tutorials</a>
+            <a href={`${base}about`} class="btn btn-ghost">About the initiative</a>
+          </div>
+          <div class="hero-pillars">
+            <span class="pillar">Education</span>
+            <span class="pillar-sep">·</span>
+            <span class="pillar">Creation</span>
+            <span class="pillar-sep">·</span>
+            <span class="pillar">Exploration</span>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <svg class="hero-svg" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
+            <!-- Voronoi-inspired radial lines -->
+            <g stroke="rgba(0,229,195,0.18)" stroke-width="0.5" fill="none">
+              {Array.from({length: 24}, (_, i) => {
+                const angle = (i / 24) * Math.PI * 2;
+                const x2 = 170 + Math.cos(angle) * 155;
+                const y2 = 170 + Math.sin(angle) * 155;
+                return `<line x1="170" y1="170" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" />`;
+              }).join('')}
+            </g>
+            <!-- Spirograph parametric curves -->
+            <path class="spiro-1" fill="none" stroke="rgba(0,229,195,0.6)" stroke-width="1.2"
+              d={`M ${Array.from({length: 360}, (_, t) => {
+                const R=110, r=37, d=60, rad=t*Math.PI/180;
+                const x = 170 + (R-r)*Math.cos(rad) + d*Math.cos((R-r)/r*rad);
+                const y = 170 + (R-r)*Math.sin(rad) - d*Math.sin((R-r)/r*rad);
+                return `${t===0?'':' L'}${x.toFixed(2)} ${y.toFixed(2)}`;
+              }).join('')} Z`}
+            />
+            <path class="spiro-2" fill="none" stroke="rgba(245,166,35,0.4)" stroke-width="0.8"
+              d={`M ${Array.from({length: 360}, (_, t) => {
+                const R=90, r=23, d=75, rad=t*Math.PI/180;
+                const x = 170 + (R-r)*Math.cos(rad) + d*Math.cos((R-r)/r*rad);
+                const y = 170 + (R-r)*Math.sin(rad) - d*Math.sin((R-r)/r*rad);
+                return `${t===0?'':' L'}${x.toFixed(2)} ${y.toFixed(2)}`;
+              }).join('')} Z`}
+            />
+            <!-- Center dot -->
+            <circle cx="170" cy="170" r="3" fill="var(--accent)" opacity="0.8"/>
+            <!-- Orbit rings -->
+            <circle cx="170" cy="170" r="115" stroke="rgba(0,229,195,0.08)" stroke-width="1" fill="none"/>
+            <circle cx="170" cy="170" r="75" stroke="rgba(245,166,35,0.06)" stroke-width="1" fill="none"/>
+          </svg>
+        </div>
       </div>
     </div>
   </section>
 
   {latestNews.length > 0 && (
-    <section class="section news-strip" style="padding-top: 0; padding-bottom: 0">
+    <section class="news-strip">
       <div class="container">
         <div class="news-row">
-          <span class="news-heading">Latest</span>
+          <span class="news-heading">// latest</span>
           {latestNews.map(item => (
             <a href={item.link ?? `${base}news`} class="news-pill" {...(item.link?.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
               <span class={`tag tag-sm ${typeColors[item.type] ?? ''}`}>{item.type}</span>
@@ -50,8 +96,9 @@ const typeColors: Record<string, string> = {
     </section>
   )}
 
-  <section class="section" style="padding-top: 0">
+  <section class="section tutorials-section" style="padding-top: 1.5rem">
     <div class="container">
+      <p class="section-label">// tutorials</p>
       <div class="grid-2">
         {tutorials.map((t, i) => (
           <TutorialCard
@@ -67,77 +114,168 @@ const typeColors: Record<string, string> = {
 </Layout>
 
 <style>
-/* News strip */
-.news-strip { border-bottom: 1px solid var(--border); margin-bottom: 3.5rem; }
+/* ── Hero ── */
+.hero {
+  padding: 5rem 0 4rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-inner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 3rem;
+}
+
+.hero-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 1.1rem;
+}
+.kicker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--accent); }
+  50% { opacity: 0.5; box-shadow: 0 0 3px var(--accent); }
+}
+
+.hero h1 {
+  font-size: clamp(2.2rem, 6vw, 3.6rem);
+  margin-bottom: 1.2rem;
+}
+
+.hero-desc {
+  max-width: 480px;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+.hero-btns {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 2.5rem;
+}
+
+.hero-pillars {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.pillar { color: var(--accent); }
+.pillar-sep { color: var(--border-2); }
+
+/* SVG visual */
+.hero-visual {
+  flex-shrink: 0;
+}
+.hero-svg {
+  width: 280px;
+  height: 280px;
+  opacity: 0.9;
+}
+.spiro-1 {
+  animation: spin-slow 40s linear infinite;
+  transform-origin: 170px 170px;
+}
+.spiro-2 {
+  animation: spin-slow 60s linear infinite reverse;
+  transform-origin: 170px 170px;
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@media (max-width: 700px) {
+  .hero-inner { grid-template-columns: 1fr; }
+  .hero-visual { display: none; }
+}
+
+/* ── News strip ── */
+.news-strip {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0;
+}
 .news-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  padding: 0.85rem 0;
+  padding: 0.8rem 0;
 }
 .news-heading {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-right: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-right: 0.25rem;
   flex-shrink: 0;
 }
 .news-pill {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 99px;
-  padding: 0.3rem 0.75rem 0.3rem 0.4rem;
-  transition: border-color 0.15s;
+  gap: 0.45rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  padding: 0.28rem 0.7rem 0.28rem 0.4rem;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
 }
-.news-pill:hover { border-color: var(--accent); }
-.tag-sm { font-size: 0.65rem; padding: 0.15rem 0.5rem; }
-.news-pill-title { font-size: 0.8rem; color: var(--text); font-weight: 500; }
-.news-pill-date  { font-size: 0.72rem; color: var(--muted); }
+.news-pill:hover {
+  border-color: rgba(0,229,195,0.35);
+  background: var(--bg);
+}
+.tag-sm { font-size: 0.6rem; padding: 1px 6px; }
+.news-pill-title {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  font-weight: 400;
+}
+.news-pill-date {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+}
 .news-all {
-  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
   color: var(--muted);
   margin-left: auto;
-  transition: color 0.15s;
+  transition: color var(--dur-fast);
   flex-shrink: 0;
 }
 .news-all:hover { color: var(--accent); }
 
-.tag-talk        { background: rgba(167,139,250,0.12); color: #a78bfa; }
-.tag-exhibition  { background: rgba(244,114,182,0.12); color: #f472b6; }
-.tag-publication { background: rgba(52,211,153,0.12);  color: #34d399; }
-.tag-tutorial    { background: rgba(251,191,36,0.12);  color: #fbbf24; }
+.tag-talk        { background: rgba(0,229,195,0.1);   color: #00e5c3; border-color: rgba(0,229,195,0.2); }
+.tag-exhibition  { background: rgba(245,166,35,0.1);  color: #f5a623; border-color: rgba(245,166,35,0.2); }
+.tag-publication { background: rgba(129,140,248,0.1); color: #818cf8; border-color: rgba(129,140,248,0.2); }
+.tag-tutorial    { background: rgba(251,191,36,0.1);  color: #fbbf24; border-color: rgba(251,191,36,0.2); }
 
-/* Hero */
-.hero {
-  padding: 5rem 0 3.5rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 3.5rem;
-}
-.kicker {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 1rem;
-}
-.hero h1 { margin-bottom: 1.1rem; }
-.hero-desc {
-  max-width: 520px;
-  font-size: 1rem;
-  line-height: 1.75;
-  color: var(--muted);
-}
-.hero-btns {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 2rem;
-  flex-wrap: wrap;
-}
+/* ── Tutorials section ── */
+.tutorials-section {}
 </style>

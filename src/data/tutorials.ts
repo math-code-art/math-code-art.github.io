@@ -161,6 +161,19 @@ export const tutorials: Tutorial[] = [
     gallery: [],
   },
   {
+    slug: 'string-art',
+    title: 'String Art',
+    leads: ['Qiyang (Rosalinda) Chen'],
+    tagline: 'Approximating images with an optimized continuous thread path',
+    description:
+      'Approximates a target image by iteratively placing line connections between fixed pins arranged on a circular frame. Each string is chosen to maximally reduce the residual error between the current thread layout and the target image, gradually building up structured geometric patterns that reconstruct the original from a distance.',
+    concepts: ['Iterative greedy optimization', 'Image residual minimization', 'Circular pin layout', 'Geometric approximation'],
+    tags: ['Optimization', 'Geometry', 'Line Art'],
+    githubUrl: `${TREE}/string-art`,
+    notebooks: [],
+    gallery: [],
+  },
+  {
     slug: 'tsp-line-drawing',
     title: 'TSP Line Drawing',
     leads: ['Dengyuhan Dai'],
