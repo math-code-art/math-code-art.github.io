@@ -24,4 +24,5 @@ export const developers: Person[] = [
   { name: 'Meichen Wan', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/meichen-wan.png', url: 'https://meichenwan0704.wixsite.com/eportfolio'},
   { name: 'Dengyuhan Dai', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/dengyuhan-dai.jpg', url: 'https://tomorina0.github.io/'},
   { name: 'Qiyang (Rosalinda) Chen', role: 'Tutorial Developer', affiliation: 'UCLA', photo: '/team/qiyang-chen.jpg', url: 'https://rosiechen1005.github.io/'},
+  { name: 'Winxon Nguyen', role: 'Tutorial Developer', affiliation: 'UCLA' },
 ];
