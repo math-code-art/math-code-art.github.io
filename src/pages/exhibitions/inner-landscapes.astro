@@ -1,0 +1,195 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { exhibitions } from '../../data/exhibitions';
+
+const base = import.meta.env.BASE_URL;
+const exh  = exhibitions.find(e => e.slug === 'inner-landscapes')!;
+
+function src(filename: string) {
+  return `${base}exhibitions/inner-landscapes/${filename}`;
+}
+---
+<Layout title={exh.title} description={exh.subtitle}>
+
+  <section class="section-sm page-header">
+    <div class="container narrow">
+      <a href={`${base}exhibitions`} class="back">← Exhibitions</a>
+      <p class="kicker">Math + Code + Art Initiative · UCLA Mathematics · {exh.year}</p>
+      <h1>{exh.title}</h1>
+      <p class="subtitle">{exh.subtitle}</p>
+      <p class="artists">{exh.artists.join(', ')}</p>
+    </div>
+  </section>
+
+  <!-- Artist Statement -->
+  <section class="section statement-section">
+    <div class="container narrow">
+      <p class="label">Exhibition Statement</p>
+      <div class="statement">
+        {exh.statement.map(para => <p>{para}</p>)}
+      </div>
+    </div>
+  </section>
+
+  <!-- Works (video gallery) -->
+  {exh.works.length > 0 && (
+    <section class="section works-section">
+      <div class="container narrow">
+        <p class="label">Works</p>
+        <div class="works-grid">
+          {exh.works.map(work => (
+            <div class="work-item video-box">
+              <video src={src(work.src)} controls preload="metadata" />
+              <p class="work-caption">{work.title} · {work.year}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+
+  <!-- Medium note -->
+  <section class="section medium-section">
+    <div class="container narrow">
+      <p class="label">Medium</p>
+      <p class="medium-text">{exh.medium}</p>
+    </div>
+  </section>
+
+</Layout>
+
+<style>
+/* ── Exhibition Catalogue aesthetic — dark warm sepia ── */
+:global(body) {
+  background-color: #110e0a;
+  background-image: none;
+  color: #f0e8d8;
+}
+:global(.nav-wrap) {
+  background: rgba(17,14,10,0.88) !important;
+  border-bottom-color: #2a2218 !important;
+}
+:global(.nav-logo-text) { color: #f0e8d8 !important; }
+:global(.nav-links a)   { color: #8a7a6a !important; }
+:global(.nav-links a:hover) { color: #f0e8d8 !important; background: rgba(255,255,255,0.05) !important; border-color: #2a2218 !important; }
+:global(.footer) { border-top-color: #2a2218 !important; background: #0d0b08 !important; }
+:global(.footer-name, .footer-sub, .footer-links a) { color: #8a7a6a !important; }
+:global(.footer-links a:hover) { color: #c9a96e !important; background: transparent !important; }
+
+--cat-bg:     #110e0a;
+--cat-ink:    #f0e8d8;
+--cat-muted:  #8a7a6a;
+--cat-border: #2a2218;
+--cat-accent: #c9a96e;
+
+.narrow { max-width: 820px; }
+
+/* Header */
+.page-header {
+  border-bottom: 1px solid var(--cat-border);
+  padding-bottom: 3rem;
+}
+.back {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--cat-muted);
+  margin-bottom: 1.75rem;
+  transition: color 0.15s;
+  letter-spacing: 0.03em;
+}
+.back:hover { color: var(--cat-ink); }
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cat-muted);
+  margin-bottom: 1.1rem;
+}
+h1 {
+  font-family: var(--font-serif) !important;
+  font-size: clamp(2rem, 5vw, 3.2rem) !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--cat-ink) !important;
+  line-height: 1.15 !important;
+  margin-bottom: 0.75rem;
+}
+.subtitle {
+  font-size: 1.05rem;
+  color: var(--cat-muted);
+  font-style: italic;
+  margin-bottom: 0.6rem;
+}
+.artists {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--cat-muted);
+  letter-spacing: 0.04em;
+}
+
+/* Labels */
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cat-muted);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--cat-border);
+}
+
+/* Statement */
+.statement-section { padding-bottom: 0; }
+.statement { display: flex; flex-direction: column; gap: 1.25rem; max-width: 640px; }
+.statement p {
+  font-size: 1rem;
+  line-height: 1.9;
+  color: var(--cat-ink);
+  font-weight: 300;
+}
+
+/* Works grid */
+.works-section { border-top: 1px solid var(--cat-border); }
+.works-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2rem;
+}
+@media (max-width: 640px) {
+  .works-grid { grid-template-columns: 1fr; }
+}
+.work-item { display: flex; flex-direction: column; gap: 0.5rem; }
+.video-box {
+  overflow: hidden;
+  border-radius: 2px;
+  border: 1px solid var(--cat-border);
+  background: #1e1a14;
+}
+.video-box video {
+  width: 100%;
+  display: block;
+  border-radius: 2px;
+}
+.work-caption {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--cat-muted);
+  letter-spacing: 0.04em;
+}
+
+/* Medium */
+.medium-section { border-top: 1px solid var(--cat-border); padding-bottom: 5rem; }
+.medium-text {
+  font-size: 0.9rem;
+  color: var(--cat-muted);
+  font-style: italic;
+  line-height: 1.7;
+  max-width: 480px;
+}
+
+</style>
