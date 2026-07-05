@@ -26,7 +26,11 @@ function src(filename: string) {
     <div class="container narrow">
       <p class="label">Exhibition Statement</p>
       <div class="statement">
-        {exh.statement.map(para => <p>{para}</p>)}
+        {exh.statement.map(para => (
+          para === 'Artist Statement' || para === 'Technical Details'
+            ? <p class="statement-heading">{para}</p>
+            : <p>{para}</p>
+        ))}
       </div>
     </div>
   </section>
@@ -152,6 +156,15 @@ h1 {
   color: var(--cat-ink);
   font-weight: 300;
 }
+.statement p.statement-heading {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cat-ink);
+  margin-top: 0.5rem;
+}
+.statement p.statement-heading:first-child { margin-top: 0; }
 
 /* Works grid */
 .works-section { border-top: 1px solid var(--cat-border); }
