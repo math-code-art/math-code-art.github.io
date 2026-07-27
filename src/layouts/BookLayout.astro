@@ -165,7 +165,6 @@ function sidebarLabel(e: CollectionEntry<'book'>) {
       <nav class="book-sidebar" aria-label="Book contents">
         {frontMatterEntries.length > 0 && (
           <div class="side-group">
-            <p class="side-label">Front Matter</p>
             <ul>
               {frontMatterEntries.map(e => (
                 <li><a href={hrefFor(e)} class={e.slug === currentSlug ? 'active' : ''}>{sidebarLabel(e)}</a></li>
@@ -175,11 +174,10 @@ function sidebarLabel(e: CollectionEntry<'book'>) {
         )}
 
         <div class="side-group">
-          <p class="side-label">Part I — Education</p>
-          {educationIntro && (
-            <ul class="side-intro">
-              <li><a href={hrefFor(educationIntro)} class={educationIntro.slug === currentSlug ? 'active' : ''}>{educationIntro.data.title}</a></li>
-            </ul>
+          {educationIntro ? (
+            <a href={hrefFor(educationIntro)} class={`side-label side-label-link ${educationIntro.slug === currentSlug ? 'active' : ''}`}>Part I — Education</a>
+          ) : (
+            <p class="side-label">Part I — Education</p>
           )}
           {educationGroups.map(g => (
             <div class="side-subgroup">
@@ -194,11 +192,10 @@ function sidebarLabel(e: CollectionEntry<'book'>) {
         </div>
 
         <div class="side-group">
-          <p class="side-label">Part II — Creation</p>
-          {creationIntro && (
-            <ul class="side-intro">
-              <li><a href={hrefFor(creationIntro)} class={creationIntro.slug === currentSlug ? 'active' : ''}>{creationIntro.data.title}</a></li>
-            </ul>
+          {creationIntro ? (
+            <a href={hrefFor(creationIntro)} class={`side-label side-label-link ${creationIntro.slug === currentSlug ? 'active' : ''}`}>Part II — Creation</a>
+          ) : (
+            <p class="side-label">Part II — Creation</p>
           )}
           {creationEntries.length > 0 && (
             <ul>
@@ -210,11 +207,10 @@ function sidebarLabel(e: CollectionEntry<'book'>) {
         </div>
 
         <div class="side-group">
-          <p class="side-label">Part III — Exploration</p>
-          {explorationIntro && (
-            <ul class="side-intro">
-              <li><a href={hrefFor(explorationIntro)} class={explorationIntro.slug === currentSlug ? 'active' : ''}>{explorationIntro.data.title}</a></li>
-            </ul>
+          {explorationIntro ? (
+            <a href={hrefFor(explorationIntro)} class={`side-label side-label-link ${explorationIntro.slug === currentSlug ? 'active' : ''}`}>Part III — Exploration</a>
+          ) : (
+            <p class="side-label">Part III — Exploration</p>
           )}
           {explorationEntries.length > 0 && (
             <ul>
@@ -227,7 +223,6 @@ function sidebarLabel(e: CollectionEntry<'book'>) {
 
         {backMatterEntries.length > 0 && (
           <div class="side-group">
-            <p class="side-label">Back Matter</p>
             <ul>
               {backMatterEntries.map(e => (
                 <li><a href={hrefFor(e)} class={e.slug === currentSlug ? 'active' : ''}>{sidebarLabel(e)}</a></li>
@@ -341,8 +336,10 @@ h1 { margin-bottom: 0.75rem; }
   color: var(--text);
   margin-bottom: 0.5rem;
 }
+.side-label-link { display: block; transition: color 0.15s; }
+.side-label-link:hover { color: var(--accent); }
+.side-label-link.active { color: var(--accent); }
 .side-subgroup { margin-bottom: 0.9rem; }
-.side-intro { margin-bottom: 0.9rem; }
 .side-sublabel {
   font-family: var(--font-mono);
   font-size: 0.62rem;

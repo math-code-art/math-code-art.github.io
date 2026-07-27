@@ -164,11 +164,12 @@ both tutorials at a conceptual level.
 
 ## Back Matter
 
-- Glossary / notation reference
-- Appendix: environment & tooling setup (Python packages, Colab)
-- Contributing guide
-- Citation / how to cite
-- Team & acknowledgments
+- Bibliography
+
+(Glossary, Appendix, Contributing, Citation, and Acknowledgments were dropped as separate
+back-matter pages — Contributing/Citation/Acknowledgments already overlapped with the
+Preface's own Version History & Authors / BibTeX sections. Bibliography is the one thing
+that didn't have a home there: a references list for works cited across chapters.)
 
 ---
 
