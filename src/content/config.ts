@@ -11,7 +11,16 @@ const book = defineCollection({
     // Sorts before Ch. 1 of that part rather than after (unlike other null-chapterNumber entries).
     isPartIntro: z.boolean().optional(),
     topicFamily: z.string().optional(),
-    authors: z.array(z.string()).optional(),
+    // Everyone who contributed to this chapter's text — no lead/contributor distinction,
+    // since the same person is often mostly-writing with a little implementation help too.
+    // Empty until someone actually writes the chapter.
+    writing: z.array(z.string()).optional(),
+    // Additional implementation credit beyond the linked tutorial/exhibition/paper's own
+    // leads/artists/authors (which are pulled in automatically) — e.g. someone who helped
+    // debug the notebook for this book presentation specifically.
+    implementation: z.array(z.string()).optional(),
+    // Faculty advisors who review/revise both the text and the code.
+    editors: z.array(z.string()).optional(),
     // Slugs into src/data/tutorials.ts — resolved at render time for code/notebook links.
     // A chapter can cover more than one tutorial (e.g. a simpler predecessor + its successor).
     sourceTutorials: z.array(z.string()).optional(),

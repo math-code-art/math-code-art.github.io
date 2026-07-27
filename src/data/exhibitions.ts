@@ -11,6 +11,9 @@ export interface Exhibition {
   title: string;
   subtitle: string;
   artists: string[];
+  // Subset of `artists` credited as lead(s) for this exhibition — falls back to
+  // artists[0] if omitted. Order doesn't need to match `artists`.
+  leads?: string[];
   year: number;
   tutorialSlug?: string;
   coverSrc?: string;     // filename inside public/exhibitions/{slug}/ — omit if no image uploaded yet
@@ -24,7 +27,8 @@ export const exhibitions: Exhibition[] = [
     slug: 'cellular-impressions',
     title: 'Cellular Impressions',
     subtitle: 'Portraits Reimagined Through Algorithms',
-    artists: ['Tucker Nielson', 'Weimo Zhu', 'Jiayin Lu', 'Ying Jiang', 'Michael Andrews', 'Chenfanfu Jiang'],
+    artists: ['Tucker Nielson', 'Jiayin Lu', 'Weimo Zhu', 'Ying Jiang', 'Michael Andrews', 'Chenfanfu Jiang'],
+    leads: ['Tucker Nielson', 'Jiayin Lu'],
     year: 2026,
     tutorialSlug: 'style-transfer-voronoi',
     coverSrc: 'light-marble-1.jpg',
@@ -161,7 +165,8 @@ export const exhibitions: Exhibition[] = [
     slug: 'paper-marbling',
     title: 'Paper Marbling',
     subtitle: 'Where Historical Craft Meets Contemporary Computation',
-    artists: ['Math+Code+Art Initiative'],
+    artists: ['Yue Sun'],
+    leads: ['Yue Sun'],
     year: 2026,
     // No cover image uploaded yet — omit coverSrc rather than reference a missing file.
     statement: [
@@ -177,6 +182,7 @@ export const exhibitions: Exhibition[] = [
     title: 'Inner Landscapes',
     subtitle: 'Sound, Image, and Emotion Through Neural Networks',
     artists: ['Shanmei Wanyan', 'Jiayin Lu', 'Hanyin Zhang', 'Ying Jiang', 'Yue Sun', 'Wanxi Yang', 'Yumeng He', 'Chenfanfu Jiang'],
+    leads: ['Shanmei Wanyan', 'Jiayin Lu'],
     year: 2026,
     coverSrc: 'cover.png',
     statement: [

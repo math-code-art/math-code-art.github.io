@@ -3,6 +3,8 @@ export interface Paper {
   title: string;
   subtitle: string;
   authors: string[];
+  // Subset of `authors` credited as lead(s) — falls back to authors[0] if omitted.
+  leads?: string[];
   venue: string;
   year: number;
   arxiv: string;
@@ -18,6 +20,7 @@ export const papers: Paper[] = [
     title: 'Birth of a Painting',
     subtitle: 'Differentiable Brushstroke Reconstruction',
     authors: ['Ying Jiang', 'Jiayin Lu', 'Yunuo Chen', 'Yumeng He', 'Kui Wu', 'Yin Yang', 'Chenfanfu Jiang'],
+    leads: ['Ying Jiang', 'Jiayin Lu', 'Yunuo Chen'],
     venue: 'arXiv preprint',
     year: 2025,
     arxiv: 'arXiv:2511.13191',
@@ -32,6 +35,7 @@ export const papers: Paper[] = [
     title: 'VoroLight',
     subtitle: 'Learning Voronoi Surface Meshes via Sphere Intersection',
     authors: ['Jiayin Lu', 'Ying Jiang', 'Yumeng He', 'Yin Yang', 'Chenfanfu Jiang'],
+    leads: ['Jiayin Lu', 'Ying Jiang', 'Yumeng He'],
     venue: 'arXiv preprint',
     year: 2026,
     arxiv: 'arXiv:2512.12984',
