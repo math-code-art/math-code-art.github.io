@@ -42,7 +42,7 @@ const typeColors: Record<string, string> = {
         <div class="hero-visual" aria-hidden="true">
           <svg class="hero-svg" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
             <!-- Voronoi-inspired radial lines -->
-            <g stroke="rgba(0,229,195,0.18)" stroke-width="0.5" fill="none">
+            <g stroke="rgba(15,118,110,0.22)" stroke-width="0.5" fill="none">
               {Array.from({length: 24}, (_, i) => {
                 const angle = (i / 24) * Math.PI * 2;
                 const x2 = 170 + Math.cos(angle) * 155;
@@ -51,7 +51,7 @@ const typeColors: Record<string, string> = {
               }).join('')}
             </g>
             <!-- Spirograph parametric curves -->
-            <path class="spiro-1" fill="none" stroke="rgba(0,229,195,0.6)" stroke-width="1.2"
+            <path class="spiro-1" fill="none" stroke="rgba(15,118,110,0.6)" stroke-width="1.2"
               d={`M ${Array.from({length: 360}, (_, t) => {
                 const R=110, r=37, d=60, rad=t*Math.PI/180;
                 const x = 170 + (R-r)*Math.cos(rad) + d*Math.cos((R-r)/r*rad);
@@ -59,7 +59,7 @@ const typeColors: Record<string, string> = {
                 return `${t===0?'':' L'}${x.toFixed(2)} ${y.toFixed(2)}`;
               }).join('')} Z`}
             />
-            <path class="spiro-2" fill="none" stroke="rgba(245,166,35,0.4)" stroke-width="0.8"
+            <path class="spiro-2" fill="none" stroke="rgba(180,83,9,0.45)" stroke-width="0.8"
               d={`M ${Array.from({length: 360}, (_, t) => {
                 const R=90, r=23, d=75, rad=t*Math.PI/180;
                 const x = 170 + (R-r)*Math.cos(rad) + d*Math.cos((R-r)/r*rad);
@@ -70,8 +70,8 @@ const typeColors: Record<string, string> = {
             <!-- Center dot -->
             <circle cx="170" cy="170" r="3" fill="var(--accent)" opacity="0.8"/>
             <!-- Orbit rings -->
-            <circle cx="170" cy="170" r="115" stroke="rgba(0,229,195,0.08)" stroke-width="1" fill="none"/>
-            <circle cx="170" cy="170" r="75" stroke="rgba(245,166,35,0.06)" stroke-width="1" fill="none"/>
+            <circle cx="170" cy="170" r="115" stroke="rgba(15,118,110,0.16)" stroke-width="1" fill="none"/>
+            <circle cx="170" cy="170" r="75" stroke="rgba(180,83,9,0.14)" stroke-width="1" fill="none"/>
           </svg>
         </div>
       </div>
@@ -246,7 +246,7 @@ const typeColors: Record<string, string> = {
   transition: border-color var(--dur-fast), background var(--dur-fast);
 }
 .news-pill:hover {
-  border-color: rgba(0,229,195,0.35);
+  border-color: rgba(15,118,110,0.35);
   background: var(--bg);
 }
 .tag-sm { font-size: 0.6rem; padding: 1px 6px; }
@@ -271,10 +271,10 @@ const typeColors: Record<string, string> = {
 }
 .news-all:hover { color: var(--accent); }
 
-.tag-talk        { background: rgba(0,229,195,0.1);   color: #00e5c3; border-color: rgba(0,229,195,0.2); }
-.tag-exhibition  { background: rgba(245,166,35,0.1);  color: #f5a623; border-color: rgba(245,166,35,0.2); }
-.tag-publication { background: rgba(129,140,248,0.1); color: #818cf8; border-color: rgba(129,140,248,0.2); }
-.tag-tutorial    { background: rgba(251,191,36,0.1);  color: #fbbf24; border-color: rgba(251,191,36,0.2); }
+.tag-talk        { background: rgba(15,118,110,0.1);  color: #0f766e; border-color: rgba(15,118,110,0.28); }
+.tag-exhibition  { background: rgba(180,83,9,0.1);    color: #b45309; border-color: rgba(180,83,9,0.28); }
+.tag-publication { background: rgba(67,56,202,0.1);   color: #4338ca; border-color: rgba(67,56,202,0.28); }
+.tag-tutorial    { background: rgba(161,98,7,0.1);    color: #a16207; border-color: rgba(161,98,7,0.28); }
 
 /* ── Tutorials section ── */
 .tutorials-section {}

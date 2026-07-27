@@ -4,7 +4,7 @@ import { exhibitions } from '../../data/exhibitions';
 const base = import.meta.env.BASE_URL;
 
 function coverUrl(e: typeof exhibitions[number]) {
-  return `${base}exhibitions/${e.slug}/${e.coverSrc}`;
+  return e.coverSrc ? `${base}exhibitions/${e.slug}/${e.coverSrc}` : null;
 }
 ---
 <Layout title="Exhibitions">
@@ -22,7 +22,11 @@ function coverUrl(e: typeof exhibitions[number]) {
         {exhibitions.map(e => (
           <a href={`${base}exhibitions/${e.slug}`} class="exh-card card">
             <div class="exh-cover">
-              <img src={coverUrl(e)} alt={e.title} loading="lazy" />
+              {coverUrl(e) ? (
+                <img src={coverUrl(e)!} alt={e.title} loading="lazy" />
+              ) : (
+                <div class="exh-cover-placeholder">// image pending</div>
+              )}
             </div>
             <div class="exh-body">
               <p class="exh-year">{e.year}</p>
@@ -71,6 +75,20 @@ function coverUrl(e: typeof exhibitions[number]) {
   transition: transform 0.4s ease, opacity 0.2s ease;
 }
 .exh-card:hover .exh-cover img { transform: scale(1.05); opacity: 0.88; }
+.exh-cover-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  padding: 0.5rem;
+}
 
 .exh-body {
   padding: 1.75rem 2rem;

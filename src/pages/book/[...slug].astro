@@ -1,0 +1,29 @@
+---
+import { getCollection } from 'astro:content';
+import BookLayout from '../../layouts/BookLayout.astro';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('book');
+  // The preface is the book's root and is served at /book instead (see book/index.astro).
+  return entries
+    .filter(entry => entry.slug !== 'preface')
+    .map(entry => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+---
+<BookLayout
+  title={entry.data.title}
+  chapterNumber={entry.data.chapterNumber}
+  part={entry.data.part}
+  currentSlug={entry.slug}
+  authors={entry.data.authors}
+  sourceTutorials={entry.data.sourceTutorials}
+  sourceExhibition={entry.data.sourceExhibition}
+  sourceResearch={entry.data.sourceResearch}
+  groundsIn={entry.data.groundsIn}
+  connections={entry.data.connections}
+>
+  <Content />
+</BookLayout>

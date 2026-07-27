@@ -3,21 +3,21 @@
 /* ─── Tokens ─────────────────────────────────────────────────── */
 :root {
   /* Background layers */
-  --bg:         #060608;
-  --surface:    #0c0c12;
-  --surface-2:  #111118;
-  --border:     #1a1a28;
-  --border-2:   #242436;
+  --bg:         #ffffff;
+  --surface:    #f6f6f8;
+  --surface-2:  #eef0f3;
+  --border:     #e3e3ea;
+  --border-2:   #d0d0da;
 
-  /* Accent — electric teal + warm amber, both from the generative art outputs */
-  --accent:     #00e5c3;
-  --accent2:    #f5a623;
-  --accent-dim: rgba(0,229,195,0.12);
+  /* Accent — deep teal + burnt amber, darkened from the original neon pair for AA contrast on white */
+  --accent:     #0f766e;
+  --accent2:    #b45309;
+  --accent-dim: rgba(15,118,110,0.10);
 
   /* Text */
-  --text:   #e8eaf0;
-  --muted:  #6b7280;
-  --faint:  #323244;
+  --text:   #17171c;
+  --muted:  #52525b;
+  --faint:  #dcdce2;
 
   /* Fonts */
   --font-mono:  'IBM Plex Mono', 'Cascadia Code', monospace;
@@ -140,11 +140,11 @@ code, pre {
 }
 .btn-primary {
   background: var(--accent);
-  color: #060608;
-  box-shadow: 0 0 18px rgba(0,229,195,0.25);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(15,118,110,0.18);
 }
 .btn-primary:hover {
-  box-shadow: 0 0 28px rgba(0,229,195,0.4);
+  box-shadow: 0 6px 20px rgba(15,118,110,0.28);
 }
 .btn-ghost {
   background: transparent;
@@ -171,15 +171,15 @@ code, pre {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(0,229,195,0.04) 0%, transparent 60%);
+  background: linear-gradient(135deg, rgba(15,118,110,0.05) 0%, transparent 60%);
   opacity: 0;
   transition: opacity var(--dur-mid) var(--ease-out);
   pointer-events: none;
 }
 .card:hover {
-  border-color: rgba(0,229,195,0.3);
+  border-color: rgba(15,118,110,0.35);
   transform: translateY(-3px);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,229,195,0.08);
+  box-shadow: 0 8px 24px rgba(23,23,28,0.08), 0 0 0 1px rgba(15,118,110,0.14);
 }
 .card:hover::before { opacity: 1; }
 

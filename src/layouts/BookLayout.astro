@@ -1,0 +1,428 @@
+---
+import Layout from './Layout.astro';
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { tutorials } from '../data/tutorials';
+import { exhibitions } from '../data/exhibitions';
+import { papers } from '../data/research';
+import 'katex/dist/katex.min.css';
+
+interface Props {
+  title: string;
+  chapterNumber: number | null;
+  part: 'front-matter' | 'education' | 'creation' | 'exploration' | 'back-matter';
+  currentSlug: string;
+  authors?: string[];
+  sourceTutorials?: string[];
+  sourceExhibition?: string;
+  sourceResearch?: string;
+  groundsIn?: string[];
+  connections?: string[];
+}
+
+const {
+  title, chapterNumber, part, currentSlug,
+  authors, sourceTutorials, sourceExhibition, sourceResearch, groundsIn, connections,
+} = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+const resolvedTutorials = (sourceTutorials ?? [])
+  .map(slug => tutorials.find(t => t.slug === slug))
+  .filter((t): t is (typeof tutorials)[number] => Boolean(t));
+const exhibition = sourceExhibition ? exhibitions.find(e => e.slug === sourceExhibition) : undefined;
+const paper = sourceResearch ? papers.find(p => p.key === sourceResearch) : undefined;
+
+const partOrder = ['front-matter', 'education', 'creation', 'exploration', 'back-matter'] as const;
+const partLabels: Record<string, string> = {
+  'front-matter': 'Front Matter',
+  education: 'Part I — Education',
+  creation: 'Part II — Creation',
+  exploration: 'Part III — Exploration',
+  'back-matter': 'Back Matter',
+};
+
+const allEntries = await getCollection('book');
+
+// Part-intro pages sort before Ch. 1 of their part; other null-chapterNumber
+// entries (Preface, back matter) sort after numbered chapters within their group.
+function sortKey(e: CollectionEntry<'book'>) {
+  if (e.data.isPartIntro) return -1;
+  return e.data.chapterNumber ?? Infinity;
+}
+
+const sorted = [...allEntries].sort((a, b) => {
+  const pa = partOrder.indexOf(a.data.part);
+  const pb = partOrder.indexOf(b.data.part);
+  if (pa !== pb) return pa - pb;
+  return sortKey(a) - sortKey(b);
+});
+
+function resolveRefs(slugs: string[] | undefined) {
+  if (!slugs) return [];
+  return slugs
+    .map(slug => allEntries.find(e => e.slug === slug))
+    .filter((e): e is CollectionEntry<'book'> => Boolean(e));
+}
+const groundsInEntries = resolveRefs(groundsIn);
+const connectionsEntries = resolveRefs(connections);
+
+const currentIndex = sorted.findIndex(e => e.slug === currentSlug);
+const prev = currentIndex > 0 ? sorted[currentIndex - 1] : null;
+const next = currentIndex >= 0 && currentIndex < sorted.length - 1 ? sorted[currentIndex + 1] : null;
+
+function groupByFamily(entries: CollectionEntry<'book'>[]) {
+  const order: string[] = [];
+  const map: Record<string, CollectionEntry<'book'>[]> = {};
+  for (const e of entries) {
+    const fam = e.data.topicFamily ?? 'Other';
+    if (!map[fam]) { map[fam] = []; order.push(fam); }
+    map[fam].push(e);
+  }
+  return order.map(family => ({ family, entries: map[family] }));
+}
+
+const frontMatterEntries = sorted.filter(e => e.data.part === 'front-matter');
+const educationIntro = sorted.find(e => e.data.part === 'education' && e.data.isPartIntro);
+const educationGroups = groupByFamily(sorted.filter(e => e.data.part === 'education' && !e.data.isPartIntro));
+const creationIntro = sorted.find(e => e.data.part === 'creation' && e.data.isPartIntro);
+const creationEntries = sorted.filter(e => e.data.part === 'creation' && !e.data.isPartIntro);
+const explorationIntro = sorted.find(e => e.data.part === 'exploration' && e.data.isPartIntro);
+const explorationEntries = sorted.filter(e => e.data.part === 'exploration' && !e.data.isPartIntro);
+const backMatterEntries = sorted.filter(e => e.data.part === 'back-matter');
+
+// The preface is the book's root — it lives at /book, not /book/preface.
+function hrefFor(e: CollectionEntry<'book'>) {
+  return e.slug === 'preface' ? `${base}book` : `${base}book/${e.slug}`;
+}
+
+// Chapters show "Ch. N — Title"; front/back matter and Part-intro pages just show the title.
+function sidebarLabel(e: CollectionEntry<'book'>) {
+  return e.data.chapterNumber != null ? `Ch. ${e.data.chapterNumber} — ${e.data.title}` : e.data.title;
+}
+---
+<Layout title={title} description={`${partLabels[part]} — Math+Code+Art book`}>
+  <section class="section-sm page-header">
+    <div class="container narrow">
+      {currentSlug !== 'preface' && <a href={`${base}book`} class="back">← Book contents</a>}
+      <p class="part-label">{partLabels[part]}{chapterNumber != null ? ` · Ch. ${chapterNumber}` : ''}</p>
+      <h1>{title}</h1>
+
+      {Boolean(authors?.length || resolvedTutorials.length || exhibition || paper || groundsInEntries.length || connectionsEntries.length) && (
+        <div class="meta-box">
+          {authors?.length ? (
+            <p class="meta-row"><span class="meta-label">By</span> {authors.join(', ')}</p>
+          ) : null}
+
+          {resolvedTutorials.map(tutorial => (
+            <p class="meta-row">
+              <span class="meta-label">Source tutorial</span>
+              <a href={`${base}tutorials/${tutorial.slug}`}>{tutorial.title}</a>
+              {tutorial.githubUrl && <> · <a href={tutorial.githubUrl} target="_blank" rel="noopener noreferrer">code</a></>}
+              {tutorial.notebooks.map(nb => (
+                <> · <a href={nb.url.replace('https://github.com/', 'https://colab.research.google.com/github/')} target="_blank" rel="noopener noreferrer">{nb.label}</a></>
+              ))}
+            </p>
+          ))}
+
+          {exhibition && (
+            <p class="meta-row">
+              <span class="meta-label">Exhibition</span>
+              <a href={`${base}exhibitions/${exhibition.slug}`}>{exhibition.title}</a>
+            </p>
+          )}
+
+          {paper && (
+            <p class="meta-row">
+              <span class="meta-label">Paper</span>
+              <a href={paper.url} target="_blank" rel="noopener noreferrer">{paper.title} — {paper.linkLabel}</a>
+              {' '}({paper.arxiv})
+            </p>
+          )}
+
+          {groundsInEntries.length > 0 && (
+            <p class="meta-row">
+              <span class="meta-label">Builds on</span>
+              {groundsInEntries.map((e, i) => (
+                <>{i > 0 && ', '}<a href={hrefFor(e)}>{e.data.chapterNumber != null ? `Ch. ${e.data.chapterNumber} — ` : ''}{e.data.title}</a></>
+              ))}
+            </p>
+          )}
+
+          {connectionsEntries.length > 0 && (
+            <p class="meta-row">
+              <span class="meta-label">Continues in</span>
+              {connectionsEntries.map((e, i) => (
+                <>{i > 0 && ', '}<a href={hrefFor(e)}>{e.data.chapterNumber != null ? `Ch. ${e.data.chapterNumber} — ` : ''}{e.data.title}</a></>
+              ))}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  </section>
+
+  <section class="section book-body">
+    <div class="container narrow book-grid">
+      <nav class="book-sidebar" aria-label="Book contents">
+        {frontMatterEntries.length > 0 && (
+          <div class="side-group">
+            <p class="side-label">Front Matter</p>
+            <ul>
+              {frontMatterEntries.map(e => (
+                <li><a href={hrefFor(e)} class={e.slug === currentSlug ? 'active' : ''}>{sidebarLabel(e)}</a></li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div class="side-group">
+          <p class="side-label">Part I — Education</p>
+          {educationIntro && (
+            <ul class="side-intro">
+              <li><a href={hrefFor(educationIntro)} class={educationIntro.slug === currentSlug ? 'active' : ''}>{educationIntro.data.title}</a></li>
+            </ul>
+          )}
+          {educationGroups.map(g => (
+            <div class="side-subgroup">
+              <p class="side-sublabel">{g.family}</p>
+              <ul>
+                {g.entries.map(e => (
+                  <li><a href={hrefFor(e)} class={e.slug === currentSlug ? 'active' : ''}>{sidebarLabel(e)}</a></li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div class="side-group">
+          <p class="side-label">Part II — Creation</p>
+          {creationIntro && (
+            <ul class="side-intro">
+              <li><a href={hrefFor(creationIntro)} class={creationIntro.slug === currentSlug ? 'active' : ''}>{creationIntro.data.title}</a></li>
+            </ul>
+          )}
+          {creationEntries.length > 0 && (
+            <ul>
+              {creationEntries.map(e => (
+                <li><a href={hrefFor(e)} class={e.slug === currentSlug ? 'active' : ''}>{sidebarLabel(e)}</a></li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div class="side-group">
+          <p class="side-label">Part III — Exploration</p>
+          {explorationIntro && (
+            <ul class="side-intro">
+              <li><a href={hrefFor(explorationIntro)} class={explorationIntro.slug === currentSlug ? 'active' : ''}>{explorationIntro.data.title}</a></li>
+            </ul>
+          )}
+          {explorationEntries.length > 0 && (
+            <ul>
+              {explorationEntries.map(e => (
+                <li><a href={hrefFor(e)} class={e.slug === currentSlug ? 'active' : ''}>{sidebarLabel(e)}</a></li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {backMatterEntries.length > 0 && (
+          <div class="side-group">
+            <p class="side-label">Back Matter</p>
+            <ul>
+              {backMatterEntries.map(e => (
+                <li><a href={hrefFor(e)} class={e.slug === currentSlug ? 'active' : ''}>{sidebarLabel(e)}</a></li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </nav>
+
+      <div class="book-content">
+        <slot />
+
+        <div class="prev-next">
+          {prev ? (
+            <a href={hrefFor(prev)} class="pn-link pn-prev">
+              <span class="pn-dir">← Previous</span>
+              <span class="pn-title">{prev.data.title}</span>
+            </a>
+          ) : <span />}
+          {next ? (
+            <a href={hrefFor(next)} class="pn-link pn-next">
+              <span class="pn-dir">Next →</span>
+              <span class="pn-title">{next.data.title}</span>
+            </a>
+          ) : <span />}
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<style>
+.narrow { max-width: 1080px; }
+
+.page-header { border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; }
+.back {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+  letter-spacing: 0.02em;
+  transition: color 0.15s;
+}
+.back:hover { color: var(--accent); }
+.part-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+h1 { margin-bottom: 0.75rem; }
+
+.meta-box {
+  margin-top: 1.25rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.meta-row { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+.meta-row a { color: var(--accent); }
+.meta-row a:hover { opacity: 0.8; }
+.meta-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-right: 0.5rem;
+}
+
+.book-body { padding-top: 2rem; }
+.book-grid {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+@media (max-width: 800px) {
+  .book-grid { grid-template-columns: 1fr; }
+}
+
+/* Sidebar */
+.book-sidebar {
+  position: sticky;
+  top: calc(var(--nav-h) + 1.5rem);
+  max-height: calc(100vh - var(--nav-h) - 3rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-right: 0.5rem;
+}
+@media (max-width: 800px) {
+  .book-sidebar { position: static; max-height: none; }
+}
+.side-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+.side-subgroup { margin-bottom: 0.9rem; }
+.side-intro { margin-bottom: 0.9rem; }
+.side-sublabel {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  margin: 0.5rem 0 0.35rem;
+}
+.book-sidebar ul { display: flex; flex-direction: column; gap: 0.3rem; }
+.book-sidebar a {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  line-height: 1.4;
+  transition: color 0.15s, background 0.15s;
+}
+.book-sidebar a:hover { color: var(--text); background: var(--surface); }
+.book-sidebar a.active { color: var(--accent); background: var(--surface); font-weight: 500; }
+
+/* Content */
+.book-content :global(h2) { margin-top: 2.25rem; margin-bottom: 0.85rem; }
+.book-content :global(h2:first-child) { margin-top: 0; }
+.book-content :global(h3) { margin-top: 1.5rem; margin-bottom: 0.6rem; }
+.book-content :global(p) { line-height: 1.8; color: var(--text); margin-bottom: 1rem; }
+.book-content :global(ul),
+.book-content :global(ol) { margin: 0 0 1rem 1.4rem; padding: 0; }
+.book-content :global(ul) { list-style: disc; }
+.book-content :global(ol) { list-style: decimal; }
+.book-content :global(li) { line-height: 1.8; color: var(--text); margin-bottom: 0.5rem; }
+.book-content :global(li:last-child) { margin-bottom: 0; }
+.book-content :global(li > p) { margin-bottom: 0; }
+.book-content :global(strong) { font-weight: 600; }
+.book-content :global(a) { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.book-content :global(a:hover) { opacity: 0.8; }
+.book-content :global(blockquote) {
+  border-left: 2px solid var(--border-2);
+  padding-left: 1rem;
+  color: var(--muted);
+  font-style: italic;
+  margin: 0 0 1rem;
+}
+.book-content :global(code) {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.88em;
+}
+.book-content :global(img) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1.25rem;
+}
+
+.prev-next {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-top: 3.5rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--border);
+}
+.pn-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: 48%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.15s;
+}
+.pn-link:hover { border-color: var(--accent); }
+.pn-next { text-align: right; margin-left: auto; }
+.pn-dir {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.pn-title { font-size: 0.85rem; color: var(--text); }
+</style>
