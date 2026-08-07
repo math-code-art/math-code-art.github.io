@@ -7,3 +7,65 @@ sourceTutorials: ["voronoi-mosaic"]
 connections: ["vorolight"]
 ---
 
+
+# Voronoi Mosaics with Adaptive Sampling and Segment Anything Model (SAM)
+
+## Abstract
+
+Using Voronoi Diagrams and Meta’s neural network, the Segment Anything Model (SAM), we can transform any image into a stained glass mosaic by defining boundaries 
+based on an area's significance due to brightness and edge factors. 
+
+## Chapter Goals
+
+By the end of this chapter you should:
+
+- Know what a Voronoi Diagram is and why it is so important
+- Build a density field for an image using brightness and edge factors
+- Create a piece of Voronoi Mosaic art by coding in Python
+- Use Meta’s Segment Anything Model (SAM) to generate an object mask
+- Combine SAM's object masks with adaptive sampling to build mosaics that respect object boundaries
+
+## Introduction
+
+Look at any photograph for more than a second and you'll notice something obvious that most image-processing pipelines quietly ignore: not all of it matters equally.
+A portrait holds its story in the eyes, the corner of a smile, or the tiny lines that make up a dress’ weave; whilst the plain cement wall behind the subject could 
+be summarized in a single stroke and nobody would object. Humans categorize their attention this way instinctively. In this chapter, we're going to teach a computer 
+to do the same thing, using the technique of Voronoi Diagrams.
+
+Image Here
+
+The oldest record of the idea comes from René Descartes, sketching out the starry skies by partitioning the space by proximity to the nearest star, in order to map 
+the range of influence of the celestial bodies. Fast forward to 1854, during the cholera outbreak in London, English physician John Snow mapped every home to the 
+nearest water pump in the city, creating a map of  “cells,” each with a water pump at its center. Comparing this map with the map of household deaths, he found the 
+vast majority lied in the “cell” of the Broad Street pump. The pump-by-pump territories he sketched were, in effect, Voronoi cells, one of the earliest practical 
+life and death applications of the idea before anyone had named it. In today's world, this idea has been constantly adapted to fields far beyond epidemiology. 
+In computer science, Voronoi cells power nearest neighbor search and mesh generation, letting a robot or a game engine instantly work out which point between a 
+charging dock, a checkpoint, or a Wi-Fi router it is closest to. In biology, the same geometry describes how cells pack themselves into tissue: each nucleus behaves 
+like a generating point, pushing outward until it collides with its neighbors, which is why a cross-section of skin or plant tissue under a microscope looks uncannily 
+like a Voronoi diagram. And in architecture, the pattern has been used deliberately, the ceiling and façade of Beijing's National Aquatics Center for the 2008 
+Olympics, were designed around a Voronoi lattice meant to echo the irregular geometry of soap bubbles. The same math has been used endlessly since centuries ago. 
+
+Table Here
+
+The name itself didn't arrive until 1908, when the mathematician Georgy Voronoi formally generalized the construction to arbitrary dimensions while working on the geometry of quadratic forms, and formalized the definition of Voronoi diagrams as “a partition of space into regions where each region contains all points closest to one generating point, compared with all other generating points.”
+
+In other words, the user chooses a type of scattered point, and categorizes space by which scattered point it is closest to.
+
+Mathematically, let \(X\) be a metric space with distance function \(d\), where \(x \in X\). Given a set \(S\) of sites \(\{p_1, p_2, \ldots, p_n\} \subset X\), we define a cell with \(p_i\) as its “seed” or “central point” as
+
+$$
+V_i = \left\{x \in X \mid d(x, p_i) \le d(x, p_j)\ \forall j \ne i \right\}.
+$$
+
+The diagram is simply the collection of \(V_i\) for all \(n\).
+
+Table Here
+
+From this historical method of describing star fields and disease prevention, we are going to use it to describe pixels, turning an image into a field of “significance” 
+that lets us decide where we scatter the points in order to create a Voronoi mosaic.
+
+## Adaptive Sampling
+
+### Methodology
+
+

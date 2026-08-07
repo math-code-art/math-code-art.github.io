@@ -9,6 +9,7 @@ node_modules/
 
 # Local Claude Code / agent tooling — not for version control
 .agents/
+.claude
 skills-lock.json
 
 # macOS
