@@ -47,25 +47,26 @@ Olympics, were designed around a Voronoi lattice meant to echo the irregular geo
 
 Table Here
 
-The name itself didn't arrive until 1908, when the mathematician Georgy Voronoi formally generalized the construction to arbitrary dimensions while working on the geometry of quadratic forms, and formalized the definition of Voronoi diagrams as “a partition of space into regions where each region contains all points closest to one generating point, compared with all other generating points.”
+The name itself didn't arrive until 1908, when the mathematician Georgy Voronoi formally generalized the construction to arbitrary dimensions while working on the 
+geometry of quadratic forms, and formalized the definition of Voronoi diagrams as “a partition of space into regions where each region contains all points closest 
+to one generating point, compared with all other generating points.”
 
 In other words, the user chooses a type of scattered point, and categorizes space by which scattered point it is closest to.
 
-Mathematically, let \(X\) be a metric space with distance function \(d\), where \(x \in X\). Given a set \(S\) of sites \(\{p_1, p_2, \ldots, p_n\} \subset X\), we define a cell with \(p_i\) as its “seed” or “central point” as
+Mathematically, let $X$ be a metric space with distance function $d$, where $x \in X$. Given a set $S$ of sites $\{p_1, p_2, \ldots, p_n\} \subset X$, we define a 
+cell with $p_i$ as its “seed” or “central point” as
 
-$$
-V_i = \left\{x \in X \mid d(x, p_i) \le d(x, p_j)\ \forall j \ne i \right\}.
-$$
+$$ V_i = \left\{x \in X \mid d(x, p_i) \le d(x, p_j)\ \forall j \ne i \right\}. $$
 
-The diagram is simply the collection of \(V_i\) for all \(n\).
+The diagram is simply the collection of $V_i$ for all $n$.
 
 Table Here
 
-From this historical method of describing star fields and disease prevention, we are going to use it to describe pixels, turning an image into a field of “significance” 
-that lets us decide where we scatter the points in order to create a Voronoi mosaic.
+From this historical method of describing star fields and disease prevention, we are going to use it to describe pixels, turning an image into a field of 
+“significance” that lets us decide where we scatter the points in order to create a Voronoi mosaic.
 
 ## Adaptive Sampling
 
-### Methodology
+### *Methodology*
 
 
