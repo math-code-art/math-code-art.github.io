@@ -67,6 +67,133 @@ From this historical method of describing star fields and disease prevention, we
 
 ## Adaptive Sampling
 
-### *Methodology*
+### **Methodology**
 
+The question we want to answer in this section is “What is important in the image?” We define a pixel’s significance by making a *significance field* constructed with 
+2 factors. We look at the brightness, as well as its relationship to surrounding pixels, called the edges. These are defined by the *brightness gradient*, in other 
+words, how fast the pixel brightness changes as you shift across the image. This allows the detection of an image. In digital image processing, it is called a *Sobel filter*.
+
+Table Here
+
+Figure 2 shows what happens when we look at $1-brightness$ of the image. We subtract from one because rather than brightness, we are looking for the dark terms. This is 
+because in art, brighter areas are often flattened and lose detail since light erodes nearby detail due to the effect of *luminance contrast degradation*. In other words, 
+darker areas preserve more details and thus have more “significance.” Figure 3 shows values in which there is a high gradient, such as when we transition from the 
+white fur to pitch black eyes, or the blanket transitions to its shadow.
+
+Overlapping these 2 factors, we get our *significance density field*, which we can define as $density = w_b * (1-brightness) + w_e * edges$. The $w_b$ and $w_e$ terms are 
+so that we can adjust how important we value the brightness factor, or the edge factor. We will get back to this later. For now, we define $w_b = 0.6$ and $w_e = 0.4$, 
+which also happens to align the *density field* to neatly range from [0,1]. Now, how do we get the *brightness* and *edge* terms?
+
+### **Brightness Filter**
+
+Logically, one option to acquire a pixel's brightness value is to take the red, green, and blue values that range from 0 to 255, and divide them by 3. However, this provides 
+the value for intensity, and not the brightness, due to the fact that human eyes do not perceive red, green, and blue with the same sensitivity. Instead, we can use the 
+standard Rec. 709 colour weights, and define $ brightness = 0.2126 * R_lin + 0.7152 * G_lin + 0.0722 * B_lin $. But why $R_lin$, $G_lin$, and $B_lin$? Why not just $R$,$G$, 
+and $B$? The reason is that we must linearize the values. What is linearization? The red, green, and blue values stored in an ordinary image file aren't physical light 
+measurements. Instead, they are stored as sRGB, a standard method of colour encoding. In sRGB, a nonlinear gamma curve is applied in order to compress brightness values so 
+that darker tones get more precision (which helps with limited 8-bit storage per channel) and also roughly matches how human vision perceives differences in brightness. As 
+such, the RGB numbers in the file do not scale linearly with actual light. For example, doubling a stored value does not mean twice as much physical light. If we were to plug 
+in the sRGB values directly into the Rec. 709 weights, which is what most primitive brightness formulas do, and you get a value called luma: a fast, but not inaccurate 
+approximation of brightness. To get true linear luminance, we first need to undo that gamma curve, converting each channel back to linear light, before weighting and summing 
+them, using these formulas: 
+
+$$ 
+R_{\mathrm{lin}} =
+\frac{R}{12.92},
+\quad R \le 0.04045
+$$
+
+and
+
+$$
+R_{\mathrm{lin}} =
+\left(\frac{R + 0.055}{1.055}\right)^{2.4},
+\quad R > 0.04045.
+$$
+
+This is the same for green and blue as well. However, we must make sure to normalize our result in the range [0, 1] to work with the linearization process. Thus we now obtain 
+a true brightness formula to compute genuine luminance rather than an approximation. 
+
+### Sobel Filter
+
+Now that we have discussed brightness, we can discuss how the image’s brightness changes, as a gradient. This allows us to detect edges within an image. Let $B(x, y)$ be the 
+continuous brightness function of the image, then the direction and rate of change of brightness is given by:
+
+$$
+\nabla B(x, y) = \left(\frac{\partial B}{\partial x}, \frac{\partial B}{\partial y}\right)
+$$
+
+However, since in reality $B(x, y)$ is not continuous, but is a discrete function of pixels, we can instead calculate with the slope formula. The gradient terms are then 
+approximated with:
+
+$$
+\frac{\partial B}{\partial x} \approx \frac{B(x+1, y) - B(x-1, y)}{2}
+$$
+
+and
+
+$$
+\frac{\partial B}{\partial y} \approx \frac{B(x, y+1) - B(x, y-1)}{2}
+$$
+
+which corresponds to convolving the image with the tiny 1-D kernel $[-1, 0, 1]$. The problem is this raw derivative kernel is extremely sensitive to noise. A single stray 
+bright pixel produces a false edge, because nothing in the kernel distinguishes signal from noise. What makes the Sobel Filter more than just a gradient map, and widely used in 
+digital image processing, is because the derivative kernel is combined with a perpendicular smoothing kernel, $[1, 2, 1]$, which acts as a narrow Gaussian blur that minutely 
+averages neighboring rows. This allows any possible noise to be diluted, not impacting the overall edge detection. Solving for the 2-D Sobel kernel is simply taking the outer 
+product of the x vector and $[1, 2, 1]$, and y vector with $[1, 2, 1]$, as such:
+
+$$
+G_x = \begin{bmatrix} 1 \\ 2 \\ 1 \end{bmatrix} \begin{bmatrix} -1 & 0 & 1 \end{bmatrix} = \begin{bmatrix} -1 & 0 & 1 \\ -2 & 0 & 2 \\ -1 & 0 & 1 \end{bmatrix}
+$$
+
+$$
+G_y = \begin{bmatrix} -1 \\ 0 \\ 1 \end{bmatrix} \begin{bmatrix} 1 & 2 & 1 \end{bmatrix} = \begin{bmatrix} -1 & -2 & -1 \\ 0 & 0 & 0 \\ 1 & 2 & 1 \end{bmatrix}
+$$
+
+With these terms, we can finally define our *edge* term as:
+
+$$
+edge = |\nabla B(x, y)| = \sqrt{{G_x(x, y)}^2 + {G_y(x, y)}^2}
+$$
+
+### **Centroidal Voronoi Diagrams & Lloyd Relaxation**
+
+In 1957, an engineer at Bell Labs named Stuart Lloyd was wrestling with a problem that, on its face, has nothing to do with images, points, or geometry at all. Telephone engineers 
+wanted to digitize analog voice signals, take any smoothly varying voltage and represent it discretely with finite values. However, too few levels, and the reconstructed voice sounds 
+distorted; too many, and you waste storage. So Lloyd asked, given the distribution of voice amplitudes, quiet sounds are far more common than loud ones, where along the distribution 
+should we place representative levels to make the average reconstruction error as small as possible? 
+
+His answer turned out to be a two-step loop that repeated until it stopped changing. First we assign every discrete input value to whichever representative level is closest to it, then 
+we move each representative level to the average of everything just assigned to it, weighted by how often that value actually occurs. That first step, it turns out, is exactly a Voronoi 
+diagram, the preset representative levels act as the central point, whilst every audio input is assigned based on what cell it lands in. The second step is a weighted centroid. Lloyd 
+had rederived the theory of Voronoi diagrams to solve a one-dimensional signal-processing problem. His result circulated informally among engineers for decades before it was formally 
+published in 1982. A near-identical method was found independently by Joel Max in 1960, which is why you'll sometimes see it called the Lloyd–Max algorithm. It wasn't until 1999 that 
+mathematicians Qiang Du, Vance Faber, and Max Gunzburger generalized the theory in any number of dimensions, not just one. They thus gave it the name we use today: the 
+*Centroidal Voronoi Tessellation*, or CVT. 
+
+A Voronoi tessellation becomes centroidal when every generating point sits exactly at the center of mass of its own cell. Recall the cell definition from Section 2:
+
+$$
+V_i = \{x \in X \mid d(x, p_i) \le d(x, p_j) \, \forall j \neq i\}
+$$
+
+A tessellation built from sites $p_1, p_2, \dots, p_n$ is called centroidal when each $p_i$ satisfies the equation below:
+
+$$
+p_i = \frac{\int_{V(p_i)} x \cdot \rho(x) \, dx}{\int_{V(p_i)} \rho(x) \, dx} \quad \forall i
+$$
+
+for whatever density $\rho(x)$ we're weighting by. In Lloyd's case, it is the probability distribution of voice amplitudes; in ours, the significance field from 3.1. By doing this, we 
+can adjust the scattered points from our density function to sit in their own spaces, "relaxing" them to avoid overcrowding. This matters because in application, a CVT represents a local 
+minimum of a specific quantity, in our case the total quantization error, or *distortion* represented by:
+
+$$
+D(p_1, p_2, \dots, p_n) = \sum_{i=1}^{n} \int_{V(p_i)} \rho(x) \cdot |x - p_i|^2 \, dx
+$$
+
+$D$ simply represents how far a typical point sits from its nearest representative, weighted by how much that point matters. A small $D$ means our $n$ points are doing a good job standing in 
+for the whole density field. What Lloyd's loop does is coordinate descent on $D$, by holding the partition fixed and moving each $p_i$ to its cell's centroid can only decrease $D$ or leave 
+it unchanged.
+
+Table Here
 
