@@ -88,14 +88,14 @@ which also happens to align the *density field* to neatly range from [0,1]. Now,
 
 Logically, one option to acquire a pixel's brightness value is to take the red, green, and blue values that range from 0 to 255, and divide them by 3. However, this provides 
 the value for intensity, and not the brightness, due to the fact that human eyes do not perceive red, green, and blue with the same sensitivity. Instead, we can use the 
-standard Rec. 709 colour weights, and define $ brightness = 0.2126 * R_lin + 0.7152 * G_lin + 0.0722 * B_lin $. But why $R_lin$, $G_lin$, and $B_lin$? Why not just $R$,$G$, 
-and $B$? The reason is that we must linearize the values. What is linearization? The red, green, and blue values stored in an ordinary image file aren't physical light 
-measurements. Instead, they are stored as sRGB, a standard method of colour encoding. In sRGB, a nonlinear gamma curve is applied in order to compress brightness values so 
-that darker tones get more precision (which helps with limited 8-bit storage per channel) and also roughly matches how human vision perceives differences in brightness. As 
-such, the RGB numbers in the file do not scale linearly with actual light. For example, doubling a stored value does not mean twice as much physical light. If we were to plug 
-in the sRGB values directly into the Rec. 709 weights, which is what most primitive brightness formulas do, and you get a value called luma: a fast, but not inaccurate 
-approximation of brightness. To get true linear luminance, we first need to undo that gamma curve, converting each channel back to linear light, before weighting and summing 
-them, using these formulas: 
+standard Rec. 709 colour weights, and define $ brightness = 0.2126 * R_{\mathrm{lin}} + 0.7152 * G_{\mathrm{lin}} + 0.0722 * B_{\mathrm{lin}} $. But why $R_{\mathrm{lin}}$, 
+$G_{\mathrm{lin}}$, and $G_{\mathrm{lin}}$? Why not just $R$, $G$, and $B$? The reason is that we must linearize the values. What is linearization? The red, green, and blue 
+values stored in an ordinary image file aren't physical light measurements. Instead, they are stored as sRGB, a standard method of colour encoding. In sRGB, a nonlinear gamma 
+curve is applied in order to compress brightness values so that darker tones get more precision (which helps with limited 8-bit storage per channel) and also roughly matches 
+how human vision perceives differences in brightness. As such, the RGB numbers in the file do not scale linearly with actual light. For example, doubling a stored value does 
+not mean twice as much physical light. If we were to plug in the sRGB values directly into the Rec. 709 weights, which is what most primitive brightness formulas do, and you 
+get a value called luma: a fast, but not inaccurate approximation of brightness. To get true linear luminance, we first need to undo that gamma curve, converting each channel 
+back to linear light, before weighting and summing them, using these formulas: 
 
 $$ 
 R_{\mathrm{lin}} =
@@ -174,13 +174,13 @@ mathematicians Qiang Du, Vance Faber, and Max Gunzburger generalized the theory 
 A Voronoi tessellation becomes centroidal when every generating point sits exactly at the center of mass of its own cell. Recall the cell definition from Section 2:
 
 $$
-V_i = \{x \in X \mid d(x, p_i) \le d(x, p_j) \, \forall j \neq i\}
+V_i = \{x \in X \mid d(x, p_i) \le d(x, p_j) \, \forall  j \neq i\}
 $$
 
 A tessellation built from sites $p_1, p_2, \dots, p_n$ is called centroidal when each $p_i$ satisfies the equation below:
 
 $$
-p_i = \frac{\int_{V(p_i)} x \cdot \rho(x) \, dx}{\int_{V(p_i)} \rho(x) \, dx} \quad \forall i
+p_i = \frac{\int_{} V(p_i) \cdot x \cdot \rho(x) \, dx}{\int_{} V(p_i) \cdot \rho(x) \, dx} \quad \forall i
 $$
 
 for whatever density $\rho(x)$ we're weighting by. In Lloyd's case, it is the probability distribution of voice amplitudes; in ours, the significance field from 3.1. By doing this, we 
@@ -188,7 +188,7 @@ can adjust the scattered points from our density function to sit in their own sp
 minimum of a specific quantity, in our case the total quantization error, or *distortion* represented by:
 
 $$
-D(p_1, p_2, \dots, p_n) = \sum_{i=1}^{n} \int_{V(p_i)} \rho(x) \cdot |x - p_i|^2 \, dx
+D(p_1, p_2, \dots, p_n) = \sum_{i=1}^{n} \int_{} V(p_i) \cdot \rho(x) \cdot |x - p_i|^2 \, dx
 $$
 
 $D$ simply represents how far a typical point sits from its nearest representative, weighted by how much that point matters. A small $D$ means our $n$ points are doing a good job standing in 
@@ -196,4 +196,174 @@ for the whole density field. What Lloyd's loop does is coordinate descent on $D$
 it unchanged.
 
 Table Here
+
+### Program
+
+Now that we have fully defined our density equation as: 
+
+$$
+density = w_b * (1-brightness) + w_e * edges
+$$
+
+We can create a heat map where we should focus the most amount of points and attention for our Voronoi art as shown in Figure 4. The next step is simply to translate what we have done into 
+Python! Using the Python libraries included in Appendix 1 will allow us to simplify much of the manual mathematics we will have to do, using pre-coded libraries already made. 
+
+Image Here
+
+First, we should import our sample image from Appendix 2, and obtain its dimensions in the variables H and W. 
+
+```python
+url = "https://raw.githubusercontent.com/yue-sun/generative-art/main/02_tuesday/puppy.jpg"
+img = np.array(Image.open(BytesIO(requests.get(url).content)))
+H, W, _ = img.shape
+```
+
+For the brightness term, we must normalize and linearize as we defined earlier.
+
+```python
+def srgb_to_linear(u):
+    u = np.clip(u, 0, 1)
+    return np.where(u <= 0.04045, u / 12.92, ((u + 0.055) / 1.055) ** 2.4)
+```
+
+This function can now be used to define each linear value. 
+
+```python
+s = img.astype(np.float32) / 255.0
+r_lin = srgb_to_linear(s[..., 0])
+g_lin = srgb_to_linear(s[..., 1])
+b_lin = srgb_to_linear(s[..., 2])
+```
+
+Now, we can define brightness as:
+```python
+brightness = 1.0 - (0.2126*r_lin + 0.7152*g_lin + 0.0722*b_lin)
+```
+
+Using the SciPy library, we conveniently can use the sobel function  to calculate $G_x$ and $G_y$ without doing the linear algebra ourselves. NumPy simplifies the rest of the other calculations as well. 
+One thing to note here, the Sobel kernel needs a neighboring pixel on each side to compute a derivative, but the pixels sitting right on the image's border don't have a neighbor outside the frame. 
+Using `mode="reflect"` handles this by mirroring the image back across its own edge, synthesizing a plausible neighbor instead of assuming black or leaving a gap. Skip it, and you'll see a false 
+bright or dark edge framing the entire image. Thus we get:
+
+```python
+gx = ndimage.sobel(gray, axis=1, mode="reflect")
+gy = ndimage.sobel(gray, axis=0, mode="reflect")
+edge = np.hypot(gx, gy)
+edge = edge / (edge.max() + 1e-8)
+```
+
+We can then complete significance density function with the line:
+
+```python
+density = 0.6*brightness + 0.4*edge
+```
+
+With density fully defined, we're ready to turn it into actual points. We treat the H × W image as a grid of bins, where each pixel is a bin whose probability of being chosen is proportional to its density 
+value. Flattening the density field into a 1-D array and normalizing it into a probability distribution lets us draw random pixel indices weighted by density, using `rng.choice`. We then convert those flat 
+indices back into (x, y) coordinates, and add a small amount of random jitter to each point so they don't stack exactly on top of pixel centers as such. 
+
+```python
+density = np.clip(density, 1e-12, None)
+p = density / density.sum()
+
+def sample_points_from_density(p, N, rng):
+    h, w = p.shape
+    idx = rng.choice(h*w, size=N, replace=True, p=p.ravel())
+    ys, xs = np.divmod(idx, w)
+    xs = xs + rng.random(N)
+    ys = ys + rng.random(N)
+    return np.column_stack([xs, ys])
+
+rng = np.random.default_rng(5)
+N_points = 8000
+pts = sample_points_from_density(p, N_points, rng)
+```
+The result is exactly what we planned, a dense cluster of points crowding dark areas, and sparse in the flat images, in other words, the eyes and fur, and a sparse scatter over the flat blanket. 
+
+Image Here
+
+There's a catch, though. Because sampling is random, points in high density regions can land almost on top of each other, producing small clumps rather than an even mosaic tiling. We fix this with a couple 
+of steps of Lloyd relaxation we discussed earlier, a method to improve spacing without erasing the density pattern. It accomplishes this by iterating many Voronoi diagrams from a set of points, calculating 
+the centroid of each resulting cell, and moving the points into those centers. A cell that's too small pulls its point outward as it centers itself, and a cell that's too large does the same in reverse, 
+evening out the spacing without erasing the density pattern that got us here in the first place. However, one or two iterations is enough. Too many iterations will cause the points to drift back toward a 
+uniform grid, removing the chaotic beauty of a mosaic.
+
+The algorithm starts with defining a function finding the center of each cell, by defining the $x, y$ coordinates, and using the shoelace formula for polygon area. We test if the area is close to 0, and if 
+so, it means the point lies on a line, and we simply return an average value. We then implement: 
+
+$$
+c_x, c_y = \frac{1}{6A} \sum (x_i, y_i + x_{i+1}, y_{i+1})(x_i y_{i+1} - x_{i+1} y_i)
+$$
+
+This will thus locate the $x$ and $y$ values of the $c$ centroid.
+
+```python
+def polygon_centroid(poly):
+    x, y = poly[:,0], poly[:,1]
+    A = 0.5*np.sum(x*np.roll(y,-1) - np.roll(x,-1)*y)
+    if abs(A) < 1e-10:
+        return poly.mean(axis=0)
+    cx = np.sum((x+np.roll(x,-1))*(x*np.roll(y,-1)-np.roll(x,-1)*y)) / (6*A)
+    cy = np.sum((y+np.roll(y,-1))*(x*np.roll(y,-1)-np.roll(x,-1)*y)) / (6*A)
+    return np.array([cx, cy])
+```
+
+As we mentioned before, we need to build the Voronoi mosaic for each iteration, and move the points P to the center of their region to fix/ relax the spacing. We implement with this formula:
+
+```python
+def lloyd_box_step(P, W, H):
+    V = Voronoi(P)
+    out = []
+    for r in V.point_region:
+        region = V.regions[r]
+        if not region or (-1 in region):
+            continue
+        poly = V.vertices[region]
+        if (poly[:,0].min()<0) or (poly[:,0].max()>W) or (poly[:,1].min()<0) or (poly[:,1].max()>H):
+            continue
+        out.append(polygon_centroid(poly))
+    return np.array(out) if len(out) > 50 else P
+```
+
+To iterate it twice, we simply repeat. 
+
+```python
+relaxed = pts.copy()
+for _ in range(2):
+    relaxed = lloyd_box_step(relaxed, W, H)
+```
+
+Table Here
+
+With well spaced points sitting on top of our significance field, the last step is almost anticlimactic: each point becomes the generator of its own Voronoi cell, and we fill that cell with the color sampled 
+from the original image at the generator's location. Large, flat polygons fall over the smooth blanket; small, tightly packed polygons hug the eyes and the edge of the fur. We can then put everything together 
+like such.
+
+```python
+V = Voronoi(relaxed)
+fig, ax = plt.subplots(figsize=(7,7))
+ax.imshow(img)
+for i, r in enumerate(V.point_region):
+    region = V.regions[r]
+    if not region or (-1 in region):
+        continue
+    poly = V.vertices[region]
+    if poly.size == 0:
+        continue
+    px = int(np.clip(relaxed[i,0], 0, W-1))
+    py = int(np.clip(relaxed[i,1], 0, H-1))
+    ax.fill(*zip(*poly), color=(img[py,px]/255.0), linewidth=0)
+ax.set_xlim(0,W); ax.set_ylim(H,0); ax.axis('off')
+plt.show()
+```
+
+Image here
+
+### Summary
+
+Starting from a single photograph, we built a significance field out of two humble signals: how dark a pixel is, and how sharply it disagrees with its neighbors. From there, weighted random sampling turned that 
+field into a scatter of points, Lloyd relaxation cleaned up the worst of the clumping without erasing the pattern, and a final Voronoi tessellation turned those points into the mosaic itself. The whole pipeline 
+never once asked what it was looking at, it had no idea it just spent most of its points on a dog's eyes rather than a blanket, only that the eyes were dark and edgy. That's both the charm and the limit of 
+adaptive sampling: it's fast, general, and works on any image you hand it, but it's blind to meaning. In the next section, we introduce Meta's Segment Anything Model, which trades some of that generality for 
+genuine object-level understanding, where we tell the algorithm to start becoming specific. 
 
