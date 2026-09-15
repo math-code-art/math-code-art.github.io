@@ -292,7 +292,15 @@ The algorithm starts with defining a function finding the center of each cell, b
 so, it means the point lies on a line, and we simply return an average value. We then implement: 
 
 $$
-c_x, c_y = \frac{1}{6A} \sum (x_i, y_i + x_{i+1}, y_{i+1})(x_i y_{i+1} - x_{i+1} y_i)
+A = \frac{1}{2} \sum_i \left( x_i y_{i+1} - x_{i+1} y_i \right)
+$$
+
+$$
+c_x = \frac{1}{6A} \sum_i \left( x_i + x_{i+1} \right)\left( x_i y_{i+1} - x_{i+1} y_i \right)
+$$
+
+$$
+c_y = \frac{1}{6A} \sum_i \left( y_i + y_{i+1} \right)\left( x_i y_{i+1} - x_{i+1} y_i \right)
 $$
 
 This will thus locate the $x$ and $y$ values of the $c$ centroid.
@@ -365,5 +373,442 @@ Starting from a single photograph, we built a significance field out of two humb
 field into a scatter of points, Lloyd relaxation cleaned up the worst of the clumping without erasing the pattern, and a final Voronoi tessellation turned those points into the mosaic itself. The whole pipeline 
 never once asked what it was looking at, it had no idea it just spent most of its points on a dog's eyes rather than a blanket, only that the eyes were dark and edgy. That's both the charm and the limit of 
 adaptive sampling: it's fast, general, and works on any image you hand it, but it's blind to meaning. In the next section, we introduce Meta's Segment Anything Model, which trades some of that generality for 
-genuine object-level understanding, where we tell the algorithm to start becoming specific. 
+genuine object-level understanding, where we tell the algorithm to start becoming specific.
+
+## Segment Anything Model (SAM)
+
+### Methodology
+
+What we have accomplished so far is create a formula that can take any image, and turn it into a beautiful piece of mosaic art. We successfully created a density function by defining brightness and edge values 
+by first linearizing the image colour values, and even implemented Lloyd’s relaxation algorithm to refine our final art piece. The result is a mosaic that isn’t a random composition of polygons, but one that 
+retains the important nuances of the original using a mathematical idea that has persisted through history. However, what we can do now is create a method that selectively targets only the image subject to 
+become a mosaic. We implement this using Meta’s Segment Anything Model.
+
+Every segmentation model before Meta’s SAM was a specialist. Train it to find cats, and it only finds cats. All the models were unable to generalize. If you wanted to find dogs, you would have to develop a 
+completely new model and train it, and again for birds, and again for anything else. Meta's Segment Anything project challenged the question, could a single model learn what a boundary is, in general, well 
+enough to segment any object it was never trained to recognize?
+
+The Segment Anything Model is able to identify anything by going through a few different processes. First it takes a user prompt, which can be text, point, box, or mask. Then the model processes the image 
+through an image encoder using a deep Vision Transformer. Finally, the prompt encoder will find the objects based on the user’s prompt, returning a mask on top of the image identifying the subject. The question 
+though, is how does it know for sure if the item is what the prompt is looking for? The answer is it doesn’t, the given mask is simply the most probable group of pixels to represent the sought object. Internally, 
+the mask decoder doesn't produce a hard 0 or 1, binary, decision for each pixel at all. Instead it produces a continuous score, and only becomes a binary mask based on a set threshold at the very end. Alongside 
+that mask, the model also reports a confidence score estimating how good its own answer is, similar to, but not exactly a formal probability percentage. The score is a number telling us how much to trust this 
+particular guess. We'll rely on exactly that score in 4.5, to automatically pick between several candidate masks when a prompt is ambiguous.
+
+Image Here
+
+But how does a machine produce that continuous map that scores pixels? Meta’s SAM was trained on 11 million high resolution images, breaking each into about 100 masks per image, totalling a dataset well over 
+1.1 billion masks. Drawing that many by hand would be near impossible, and so instead most of those masks weren't drawn by a human at all. With only a small initial round of human-assisted labeling, later stages 
+of the dataset were generated automatically, by earlier versions of SAM itself labeling new images, with humans stepping in only to check quality. This creates a positive feedback loop, where as the model trains 
+itself, it relies less and less on human intervention, and improves at an exponential pace. It's worth noting for a second, that 1.1 billion masks is roughly a hundred for every single one of the 11 million 
+images, and yet that is *still* small compared to how many distinct objects exist in the world, which is exactly why zero shot generalization matters so much for a task this open-ended. However, only with that 
+ability to adapt to any task, can we adapt it to this project and selectively “mosaic-fy” any item we wish!
+
+### Promptable Segmentation
+
+The first part of the process begins with the prompt. The user inputs what they want to segment, through the process of describing an object with words, a click, or even an automatic mask of everything in the 
+image! But how does a machine understand what the prompt, especially a human sentence, means? In essence, a promptable segmentation model is a function that takes a user $I$ image and $p$ prompt, feeding it 
+into a function:
+
+$$
+M = f_\theta(I, p)
+$$
+
+This differs from a normal “specialized” segmentation model $N = f_\beta(I)$ which only takes in $I$, and identifies on a specific set of pre-trained labels. For a promptable segmentation model, the labels are 
+the user’s prompt, $p$, which allows a user to specify any subject they wish within one model!
+
+### Image Encoder
+
+#### Part 1
+
+The next part of the process is pushing the image through an image encoder. But what is an image encoder? An image encoder is a network that takes in pixels, and understands what each pixel means based on 
+brightness, edges, textures, shapes, or any feature, just like how we detected edges and brightness values for our density function! The image encoder's job is to turn a 1024×1024×3 image (we resize everything 
+outside of this to that format) into a compact grid of feature vectors, before any prompt has even been considered. This is done only once due to it being a highly computationally expensive task. It's built 
+from a Vision Transformer, ViT, so the same process language transformers use on words gets applied to pixel clusters. The image is first cut into a grid of fixed 16×16 patches, totalling 4,096, and every patch 
+is flattened and linearly projected into a token. Essentially, each patch is like a word in a language transformer. This is done via a function:
+
+$$
+e_i = W_e \cdot flatten(x_i)
+$$
+
+Image Here
+
+The function $flatten(x_i)$ simply takes an arbitrary 16×16×3 patch of pixels, $i$, and flattens it. This is simply the process of rewriting the 768 numbers out in one long row instead of a grid, a conversion of 
+information. As for the variable $W_e$. $W_e$ is a matrix, already found during the extensive training process already done by Meta. This process of training a network is an extensive process in and of itself, 
+but in short, training is done via showing the network millions of images with known correct answers. With every iteration, the model repeatedly adjusts every number inside the matrix in whichever direction 
+pushes it closer to correct. What matters for us is what happens *after* training finishes: $W_e$ becomes a fixed matrix, baked into the checkpoint file we download. We just don't know, or need to know, what any 
+individual entry means, just that the matrix has been optimized for the task.
+
+Multiplying these 2 variables gets us $e_i$, a new vector for every $i$ patch. This new vector is called an embedding, and unlike a coordinate vector or color vector such as (x, y) or (R, G, B), none of $e_i$'s 
+individual coordinates have a name. What makes $e_i$ useful isn't any one number inside it, it's how $e_i$ relates to the other embeddings. Training pushes visually similar patches toward nearby vectors, and pushes 
+visually different patches apart, regardless of how different their raw pixel values happen to be. To simplify, machines are able to identify similar patches by adjusting the coordinate directions of each embedding, 
+to point towards the same direction, creating a kind of “family” of embeddings.
+
+Now that we understand the patches that compose an image though, we encounter a problem. Nothing in $e_i$ so far records where a patch $i$ sits in the image. The function $flatten(x_i)$ only represents the patch's 
+own pixels, not the whole’s position. Left alone, a transformer would treat a scrambled ordering of the same 4,096 patches identically to the correct one, since nothing marks which patch is "row 1, column 2". We 
+fix this with a second vector, $pos_i$, one fixed vector per grid position, also learned during training. We can add this directly onto $e_i$, and call it a token, carrying both data on what the patch looks like 
+and where it is, represented as:
+
+$$
+e_i = W_e \cdot flatten(x_i) + pos_i
+$$
+
+#### Part 2
+
+Now we have a job for the transformer. Currently we have 4,096 embeddings, each describing its own patch in isolation. But an image isn't a bag of independent patches, it must interact with each other to represent 
+a complete image and idea. We want each patch's embedding to *update itself* using information pulled from relevant patches. That updating step is called attention, and it's the core idea underneath every transformer. 
+Every token produces three new vectors from its own embedding, using three more learned weight matrices resulting in:
+
+$$
+q_i = W_Q \cdot e_i, \quad k_i = W_K \cdot e_i, \quad v_i = W_V \cdot e_i
+$$
+
+We can think of $q_i$ as a "query", what the $i$ patch is currently looking for. $k_i$ can be see as a "key”, what the $i$ patch has to compare to other patches, and $v_i$ as the "value" of the patch, in other words 
+it is what the $i$-th patch contributes to the whole image.
+
+To decide how much patch $i$ should attend to some other patch $j$, we compute the dot product $q_i \cdot k_j$. Using the properties of the dot product, we can tell a lot from the result. The product $q_i \cdot k_j$ 
+is large exactly when what patch $i$ is looking for lines up with what patch $j$ is advertising. For instance, a flower patch’s query vector would tend to align closely with the key vectors of nearby grass patches, 
+and align poorly with a patch of asphalt road. We will also need to divide by $\sqrt{d}$ purely for numerical stability: $q_i$ and $k_j$ are each vectors of length $d$, so their dot product is a sum of $d$ individual 
+terms, and its typical size grows with $d$. By dividing by $\sqrt{d}$, we keep these similarity scores in a consistent range regardless of how large $d$ happens to be.
+
+Image Here
+
+However, these raw similarity scores aren't weights yet, they can be any real number, positive or negative, and don't sum to anything in particular. We turn them into a genuine set of weights using the *softmax* function, 
+which takes a list of scores $s_1, \ldots, s_n$ and returns:
+
+$$
+softmax(s)_j = \frac{e^{s_j}}{\sum_k e^{s_k}}
+$$
+
+Exponentiating makes every value positive, and dividing by the total makes the whole set sum to exactly 1. As such, the output is a genuine weight map across the whole image, that forces the patch to consider the 
+contributions of every patch, and find out how it relates to them in return.
+
+Finally, patch $i$'s updated representation is just a weighted average of everyone's value vectors, using these attention weights:
+
+$$
+output_i = \sum_j softmax\left(\frac{q_i \cdot k_j}{\sqrt{d}}\right)_j \cdot v_j
+$$
+
+Written all at once for every $i$ token simultaneously. We stack all the $q_i$'s as rows of a matrix $Q$, all the $k_i$'s as rows of $K$, all the $v_i$'s as rows of $V$ — this becomes the compact form:
+
+$$
+Attention(Q, K, V) = softmax\left(\frac{Q K^T}{\sqrt{d}}\right) \cdot V
+$$
+
+One attention step lets every patch gather information from every other patch, once. SAM's image encoder repeats this many times, each attention step followed by a small per-token adjustment, and the whole stack is 
+deep enough that information can propagate well beyond just its neighbors.
+
+After all of this, a small final convolution reduces each token's dimension down to a standard size of 256, and we're left with:
+
+$$
+E = Enc_{img}(I) \in \mathbb{R}^{64 \times 64 \times 256}
+$$
+
+Which represents a 64×64 grid of 256-dimensional embeddings, one per patch, each one now informed by the entire image, not just its own small corner. Importantly, this entire process of patch cutting, embedding, 
+the many attention iterations, runs exactly once per image before a prompt is taken into consideration.
+
+### Prompt Encoder
+
+A point prompt starts as a pixel coordinate, an (x, y) vector, but a strange one to handle a network directly. Two nearby coordinates, say (x+1, y) and (x+2, y), differ by a single unit, but their corresponding 
+pixels could call for entirely different masks. If we fed raw coordinates straight into a linear layer the way we fed patch pixels into $W_e$, the network would have to somehow learn to notice extremely small 
+differences and treat them as possibly meaningful, while also treating some other small differences at a different part of the image as irrelevant. That’s incredibly difficult to train and is inefficient. SAM solves 
+this with a Fourier feature mapping, where instead of feeding (x, y) in directly, it's first passed through a fixed set of sine and cosine functions at many different frequencies using the function:
+
+$$
+\gamma(v) = (\sin(2\pi F v),\ \cos(2\pi F v))
+$$
+
+where $v = (x, y)$ is the coordinate (after rescaling to 1024×1024×3) and $F$ is a matrix of frequencies, chosen randomly once and then frozen, never adjusted during training, unlike the weight matrices we've seen so far. 
+The intuition is that a low-frequency sine wave changes very gradually across the image, so two nearby coordinates produce nearly identical values under it. This becomes useful for telling roughly which region of the 
+image a point is in. A high-frequency sine wave completes many full cycles across the same image, so it swings rapidly even between very close together coordinates. This makes it much more useful for telling two nearby 
+points apart precisely. Stacking many different frequencies together, from very low to very high, gives the network simultaneous access to both coarse position and fine position, the same coordinate viewed at many different 
+zoom levels at once. This is the same underlying idea as $pos_i$ from section 4.3, just built more elaborately, because here it's not one of several inputs to a token, but the entire content of the token before we add 
+semantic meaning to it.
+
+Image Here
+
+But $\gamma(x, y)$ only encodes where a point sits, but it says nothing about what kind of point it is. A click meant to say "this is part of the object" and a click meant to say "this is *not* part of the object" could 
+land at the exact same coordinate and $\gamma$ alone couldn't tell them apart. The fix is the simplest kind of embedding we've seen yet. A single fixed vector, we can call it $t_{fg}$ for foreground, $t_{bg}$ for 
+background, and $t_{pad}$ for an unused padding slot. This is enforced for the machine to memorize once during training, with no individual coordinate we could point to and explain, just like the embedding vector. Whichever 
+one applies gets added directly onto the positional encoding:
+
+$$
+e_{point} = \gamma(x, y) + t_{label}, \quad t_{label} \in \{t_{fg},\ t_{bg},\ t_{pad}\}
+$$
+
+As such the final token knows both where a point is, as well as what kind of “thing” that point is as well.
+
+A box prompt just reuses this twice. The two opposing corners of a box are each encoded exactly like a point: $\gamma(x_1, y_1)$ and $\gamma(x_2, y_2)$. Each gets its own label vector, top left, $t_{TL}$, or bottom right, $t_{BR}$, 
+marking which corner it is. Thus we have for box prompts:
+
+$$
+e_{TL} = \gamma(x_1, y_1) + t_{TL}, \quad e_{BR} = \gamma(x_2, y_2) + t_{BR}
+$$
+
+Rather than building a separate encoder for an entirely different prompt shape, SAM just teaches two more tokens, what "top-left corner" and "bottom-right corner" mean, and reuses the same pipeline.
+
+### Mask Decoder, Ambiguity, and Multi-Mask Output
+
+By now we have built two separate pieces, the function $E$, the 64×64 grid of patch embeddings from the 4.3, and the prompt token we built in 4.4 that locates our target. In order to put the puzzle pieces together however, we use a Mask Decoder that allows these to talk to each other, using the attention formula we already derived:
+
+$$
+Attention(Q, K, V) = softmax\left(\frac{Q K^T}{\sqrt{d}}\right) \cdot V
+$$
+
+It does this in a fixed three step order, repeated twice. First, the prompt tokens attend to each other, i.e. self-attention, exactly as in 4.3, just among the handful of prompt tokens (or often a single token) rather than the 4,096 image patches. This lets a background point cancel out a nearby foreground point's influence before either one even looks at the image. Second, the prompt tokens attend into the image embedding, cross attention, where the query vectors now come from the prompt tokens but the keys and values come from the function $E$, pulling in whatever visual detail is relevant to what was clicked. Third, the image tokens attend back out to the prompt tokens, letting the whole image representation absorb what the prompt was asking for. Run this three step exchange twice, and the decoder is done talking to itself.
+
+Mixed in among the prompt tokens for this entire exchange are a handful of extra tokens that don't represent any point or box at all, we call them “output tokens”. They start as generic, freshly initialized vectors, and their only role is to sit through the same attention process as everything else, quietly absorbing information about the image and the prompt as they go. By the end, each output token holds a compressed description of the best candidate answer. The concluding step, comparing that token against every one of the other 4,096 image tokens, expands it back out into an actual pixel by pixel mask.
+
+There’s still a problem originating from our prompt though, causing ambiguity in our answer. When you use a point prompt, the same point can refer to a multitude of items. Clicking on a car tire could refer to the car, the tire, the treads, or the bolts on the side. Instead of forcing one output token to somehow encode a single "correct" answer, SAM uses three of them, plus a fourth dedicated purely to scoring. Each of the three tokens are pre-trained, and specialize towards different scales, for sub parts, a part, or the whole object. Because of how they’re trained, for any given training example, only the best-matching of the three candidates gets reinforced, never all three averaged against the same target. That's what lets the three specialize into genuinely different answers instead of collapsing into three copies of the same blurry compromise due to averaging. The fourth token's job is separate and simpler: predict numerically, how good each of the three candidate masks are. It acts as an estimate trained against the real overlap score, and exactly the number the code calls the “score”.
+
+### Refining
+
+Refinement isn’t really a new mechanism added on to the model, but just the same mask decoder from 4.5 but ran another time, with two small changes. The first change is easy, a second point handled exactly like the first, just one more token added to the prompt.
+
+The second change is a bit more nuanced. Beyond points, boxes, and text, SAM supports a fourth kind of prompt: a dense mask. A full-resolution rough sketch, meant for a person to draw as a hint about roughly where the object is. Refinement reuses this exact process, except the "rough sketch" isn't drawn by a person, but the model's own previous output. Recall from 4.5 that before thresholding into a hard mask, the decoder's raw output is a continuous, pixel by pixel score called logits: not yet a yes or no answer, but a field that still carries the model's uncertainty. The field is high where it's confident an object is present, low where it's confident it isn't. Feeding that back in as a mask-type prompt is mechanically no different from a person sketching a rough hint by hand, shown in the function:
+
+$$
+M_{t+1},\ logits_{t+1} = Dec\left(E + Conv(logits_t),\ Enc_{prompt}(P_t)\right)
+$$
+
+where $Conv(logits_t)$ shrinks last round's heat map down and mixes it directly into the image embedding $E$. It doesn’t get turned into a token sitting alongside the points, but blended into the image side itself, the same way $pos_i$ got blended into a patch embedding back in 4.3. By the time round $t+1$ runs, $E$ already carries a rough memory of where the object was. The new point in $P_t$ just needs to nudge that memory, not rebuild it from a blank page. Add a foreground point to claim territory the model was too conservative about, or a background point to carve out something it was too generous with, and the correction only has to account for what changed.
+
+With this understanding of the backend, we can build up our mask encoder and apply our Voronoi Mosaic selectively.
+
+### Program
+
+As with adaptive sampling, we need a few libraries before starting. This time we can include Meta's own *segment-anything* package and a pretrained checkpoint, which is a few gigabytes, so expect the download to take a moment.
+
+```python
+!pip -q install opencv-python
+!pip -q install 'git+https://github.com/facebookresearch/segment-anything.git'
+!wget -q -O truck.jpg https://raw.githubusercontent.com/facebookresearch/segment-anything/main/notebooks/images/truck.jpg
+!wget -q -O sam_vit_h.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
+```
+
+SAM's own demo image is more useful here than another shot of the puppy, a truck gives us hard edges, flat panels, and a clean background, which makes it easier to see exactly what a point prompt does and doesn't capture. One step to note however, OpenCV loads images in BGR channel order, not RGB, so we need to flip that before doing anything else.
+
+```python
+import cv2
+
+image_bgr = cv2.imread("truck.jpg")
+image = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+H, W = image.shape[:2]
+```
+
+A point prompt is just a pixel coordinate and a label. “1” stands for "this is part of the object," “0” stands for "this is explicitly not." We'll start with a single foreground point, dropped roughly in the middle of the truck's cab.
+
+```python
+input_point = np.array([[500, 375]])
+input_label = np.array([1])
+```
+
+Now for the two call split from 4.3. Loading the model and calling `set_image` runs the computationally heavy image encoder exactly once.
+
+```python
+import torch
+from segment_anything import sam_model_registry, SamPredictor
+
+sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h.pth")
+sam.to(device="cuda" if torch.cuda.is_available() else "cpu")
+predictor = SamPredictor(sam)
+predictor.set_image(image)
+```
+
+With the image embedded, a single call to `predict()` runs the cheap half of the network, the prompt encoder and mask decoder from 4.4 and 4.5. Remember that an ambiguous prompt gets three candidate masks back, so we ask for all three and keep the one with the highest score.
+
+```python
+masks, scores, logits = predictor.predict(
+    point_coords=input_point,
+    point_labels=input_label,
+    multimask_output=True,
+)
+
+best_idx = int(np.argmax(scores))
+best_mask = masks[best_idx].astype(bool)
+```
+
+*Figure — three candidate masks with scores, best one highlighted*
+
+One point on a truck's cab is ambiguous in exactly the way 4.2 and 4.5 described. If the best mask stops short of the full truck, we refine rather than restart, exactly as in 4.6: pass the previous logits back in as a warm start, and add a second foreground point further along the truck bed.
+
+```python
+refined_points = np.array([[500, 375], [1125, 625]])
+refined_labels = np.array([1, 1])
+
+refined_masks, _, _ = predictor.predict(
+    point_coords=refined_points,
+    point_labels=refined_labels,
+    mask_input=logits[best_idx][None, :, :],
+    multimask_output=False,
+)
+
+final_mask = refined_masks[0].astype(bool)
+```
+
+*Figure — refined mask overlay on the truck*
+
+From mask to mosaic. With `final_mask` in hand, everything from Section 3 becomes available again, just restricted to a shape instead of a rectangle. `srgb_to_linear`, `r_lin`/`g_lin`/`b_lin`, and the Sobel gradient from 3.5 all carry over unchanged. The only new line is the one that matters, multiplying the density field by the mask, so every pixel outside the truck drops to zero density and can never be sampled.
+
+```python
+luminance = 0.2126*r_lin + 0.7152*g_lin + 0.0722*b_lin
+
+edge = np.hypot(ndimage.sobel(luminance, axis=1, mode="reflect"),
+                ndimage.sobel(luminance, axis=0, mode="reflect"))
+edge = edge / (edge.max() + 1e-8)
+
+density = 0.6*(1.0 - luminance) + 0.4*edge
+density = density * final_mask.astype(np.float32)
+```
+
+Sampling is exactly `sample_points_from_density` from 3.5, a pixel with zero density simply never gets picked, so masking comes "for free."
+
+```python
+density = np.clip(density, 1e-12, None)
+p = density / density.sum()
+
+rng = np.random.default_rng(123)
+pts = sample_points_from_density(p, N=4000, rng=rng)
+```
+
+Relaxation is the same story, almost. `lloyd_box_step` from 3.5 still works unchanged, it just moves each point to the geometric centroid of its own Voronoi cell within the image's bounding box. But "within the bounding box" is exactly the problem here: a centroid can legally sit inside that rectangle while sitting outside our curved mask, in the empty space beside the truck. Left alone, a few points drift there every iteration and never come back.
+
+The fix is a nearest-inside-pixel lookup, computed once with a distance transform: for every pixel outside the mask, it tells us the coordinates of the closest pixel that's inside.
+
+```python
+dist, (iy, ix) = ndimage.distance_transform_edt(~final_mask, return_indices=True)
+
+def project_to_mask(points, mask, ix, iy):
+    x = np.clip(points[:,0].astype(int), 0, mask.shape[1]-1)
+    y = np.clip(points[:,1].astype(int), 0, mask.shape[0]-1)
+    outside = ~mask[y, x]
+    points[outside, 0] = ix[y[outside], x[outside]]
+    points[outside, 1] = iy[y[outside], x[outside]]
+    return points
+```
+
+Run one relaxation step, then snap anything that escaped back inside, and repeat:
+
+```python
+relaxed = pts.copy()
+for _ in range(2):
+    relaxed = lloyd_box_step(relaxed, W, H)
+    relaxed = project_to_mask(relaxed, final_mask, ix, iy)
+```
+
+The last step needs its own idea, not just a reused one. Filling explicit Voronoi polygons, like we did back in 3.5, means clipping each cell against a boundary. The thing is, clipping against a rectangle, the image edge, is easy, but clipping against an arbitrary curved mask boundary can be a real challenge geometrically that won’t be solved by an if statement.
+
+So instead of building polygons at all, go back to the actual definition of a Voronoi cell from Section 2: the set of points closer to one generator than to any other. That's a rule about individual points, not about polygons, nothing requires us to express it as a shape. We can ask the question one pixel at a time, for every pixel inside the mask, which of our relaxed points is nearest? We answer that with a spatial lookup structure, a k-d tree makes this fast even for a few thousand points, and the result is, by definition, the correct Voronoi partition, automatically clipped to the mask, because we only ever asked the question for pixels already inside it.
+
+```python
+from scipy.spatial import cKDTree
+
+ys, xs = np.where(final_mask)
+mask_pixels = np.column_stack([xs, ys])
+
+tree = cKDTree(relaxed)
+_, nearest = tree.query(mask_pixels)
+```
+
+Each pixel now knows which generator it belongs to. Coloring the mosaic is one more lookup: take the color the original image had at each generator's own location, and hand it to every pixel assigned to that generator.
+
+```python
+gen_colors = image[relaxed[:,1].astype(int), relaxed[:,0].astype(int)]
+
+mosaic = image.copy()
+mosaic[ys, xs] = gen_colors[nearest]
+
+plt.figure(figsize=(8,8))
+plt.imshow(mosaic)
+plt.axis("off")
+plt.show()
+```
+
+*Figure — final masked Voronoi mosaic of the truck*
+
+The truck comes out tiled in exactly the same spirit as the puppy did, dense where the density field says there's detail, sparse where it doesn't. However, now that detail only exists where SAM told us to look. Section 3 taught the algorithm where to place points; Section 4 gave us a system on where to stop.
+
+{/*
+========================================================================
+NOTE FROM CLAUDE — proofreading pass. Read and DELETE this whole block.
+(It is wrapped in an MDX comment so it will NOT render on the site.)
+========================================================================
+
+The good news first: I checked every concept, formula, and code line and
+the substance is correct. Rec.709 luminance weights, the sRGB linearize
+constants (0.04045 / 12.92 / 1.055 / 2.4), both Sobel kernels, the ViT
+patch arithmetic (1024/16 = 64, so 4096 tokens = a 64x64 grid, 16x16x3 =
+768 numbers per patch, final 64x64x256 embedding), the SA-1B figures
+(11M images, 1.1B masks), random Fourier features, encoding a box as two
+labelled corner tokens, three mask tokens plus one IoU/score token, the
+"loss only through the best-matching mask" detail, and the SamPredictor
+API usage (set_image once, predict cheap, mask_input = logits[best_idx]
+warm start, distance_transform_edt index order, cKDTree nearest lookup)
+are all theoretically sound. Coordinate ordering in the code is
+consistent throughout (x = column, y = row).
+
+Things worth a look, most to least important:
+
+1. REFINING EQUATION vs YOUR PROSE (real inconsistency).
+   The equation reads Dec(E, Enc_prompt(P_t) + Conv(logits_t)) — i.e. the
+   convolved mask is added to the PROMPT encoding. But your prose (which
+   is the correct account of how SAM works) says the mask is blended into
+   the IMAGE side E, "not a token sitting alongside the points." The two
+   disagree. To match the prose and SAM's real design, move the term:
+   M_(t+1), logits_(t+1) = Dec( E + Conv(logits_t), Enc_prompt(P_t) ).
+
+2. BRIGHTNESS FILTER TYPO (Adaptive Sampling section, unchanged by me).
+   The sentence reads "But why R_lin, G_lin, and G_lin?" — the third one
+   should be B_lin. Right now G_lin appears twice.
+
+3. CENTROID DISPLAY EQUATION (Adaptive Sampling > Program).
+   The shoelace centroid is written as one mashed line mixing x and y:
+   "c_x, c_y = 1/(6A) sum (x_i, y_i + x_(i+1), y_(i+1)) (...)". It is hard
+   to read and not quite well-formed. Your CODE (polygon_centroid) is
+   correct; the display math is the only issue. Suggest two clean lines:
+     C_x = 1/(6A) sum (x_i + x_(i+1)) (x_i y_(i+1) - x_(i+1) y_i)
+     C_y = 1/(6A) sum (y_i + y_(i+1)) (x_i y_(i+1) - x_(i+1) y_i)
+   with A = 1/2 sum (x_i y_(i+1) - x_(i+1) y_i).
+
+4. DENSITY NAMING across the two Program sections (cosmetic, same result).
+   Adaptive Sampling defines: brightness = 1.0 - luminance, then
+   density = 0.6*brightness + 0.4*edge. The SAM Program writes it inline:
+   density = 0.6*(1.0 - luminance) + 0.4*edge. Numerically identical, but
+   the variable literally named "brightness" in the first block actually
+   holds darkness (1 - luminance). Might unify the naming to avoid a
+   double-take.
+
+5. IMAGE ENCODER symbol (minor). The projection equation is labelled
+   E_image, but the next sentence calls the per-patch result e_i, and E is
+   later the whole-image tensor. Using e_i in that first equation would
+   read more consistently.
+
+6. INTEGRAL NOTATION (minor, pre-existing, Lloyd/CVT section). The CVT
+   centroid and distortion integrals write V(p_i) as a factor inside the
+   integrand. V(p_i) is the region you integrate OVER, so it is cleaner as
+   a subscript on the integral sign than a multiplied term. Purely
+   cosmetic; the meaning is clear.
+
+7. COLOR LOOKUP safety (code, low priority). gen_colors indexes image at
+   the relaxed points without clipping to [0, W-1] / [0, H-1].
+   project_to_mask keeps them inside the mask in practice, so it is fine,
+   but a np.clip on x and y there would be a cheap guard against a stray
+   out-of-bounds index.
+
+Conversion choices I made in THIS section (flag if you disagree):
+- The three "Figure — ..." lines are YOUR draft's figure descriptions,
+  kept as italic placeholders (I dropped the square brackets so MDX does
+  not try to read them as links). Swap them to your "Image Here" style if
+  you prefer uniformity with the earlier sections.
+- The install cell (!pip / !wget) is fenced as python to match the rest
+  of the chapter (notebook cells). Change to bash if you would rather.
+- Kept all section cross-references verbatim (3.5, 4.2-4.6, Section 2/3)
+  as you asked. Reminder: these numbers are the DRAFT's numbering and do
+  not appear as numbers in the rendered headings, so a reader on the site
+  has nothing to map "4.5" onto. Worth deciding before publish.
+
+I did NOT edit any of your prose or math directly (beyond the LaTeX/code
+cleanup we agreed on for the conversion). Everything above is yours to
+accept or ignore.
+*/} 
 
