@@ -1,0 +1,80 @@
+---
+// A simple, no-JavaScript collapsible section built on the native <details>
+// element. Used in book chapters to fold long subsections behind a clickable
+// header so a page stays scannable. Content between the tags is normal MDX
+// (headings, math, code all render as usual).
+interface Props {
+  /** Text shown on the clickable header bar. */
+  title: string;
+  /** Start expanded instead of collapsed. Defaults to collapsed. */
+  open?: boolean;
+}
+const { title, open = false } = Astro.props;
+---
+<details class="collapsible" open={open}>
+  <summary class="collapsible__summary">
+    <span class="collapsible__marker" aria-hidden="true"></span>
+    <span class="collapsible__title">{title}</span>
+  </summary>
+  <div class="collapsible__body">
+    <slot />
+  </div>
+</details>
+
+<style>
+  .collapsible {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin: 0 0 1rem;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .collapsible__summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.8rem 1.1rem;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text);
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  /* Hide the default disclosure triangle (both engines). */
+  .collapsible__summary::-webkit-details-marker { display: none; }
+  .collapsible__summary::marker { content: ''; }
+
+  .collapsible__summary:hover { color: var(--accent); background: var(--surface-2); }
+  .collapsible__summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  /* Chevron drawn from two borders: points right when closed, down when open. */
+  .collapsible__marker {
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.2s ease;
+  }
+  .collapsible[open] .collapsible__marker { transform: rotate(45deg); }
+
+  .collapsible__title { flex: 1; }
+
+  .collapsible__body {
+    padding: 0.25rem 1.15rem 1rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  /* Trim the leading gap so the first element sits neatly under the header. */
+  .collapsible__body :global(> :first-child) { margin-top: 0.85rem; }
+  .collapsible__body :global(> :last-child) { margin-bottom: 0; }
+</style>

@@ -7,6 +7,7 @@ sourceTutorials: ["voronoi-mosaic"]
 connections: ["vorolight"]
 ---
 
+import Collapsible from '../../components/Collapsible.astro'
 
 # Voronoi Mosaics with Adaptive Sampling and Segment Anything Model (SAM)
 
@@ -84,7 +85,7 @@ Overlapping these 2 factors, we get our *significance density field*, which we c
 so that we can adjust how important we value the brightness factor, or the edge factor. We will get back to this later. For now, we define $w_b = 0.6$ and $w_e = 0.4$, 
 which also happens to align the *density field* to neatly range from [0,1]. Now, how do we get the *brightness* and *edge* terms?
 
-### **Brightness Filter**
+<Collapsible title="Brightness Filter">
 
 Logically, one option to acquire a pixel's brightness value is to take the red, green, and blue values that range from 0 to 255, and divide them by 3. However, this provides 
 the value for intensity, and not the brightness, due to the fact that human eyes do not perceive red, green, and blue with the same sensitivity. Instead, we can use the 
@@ -114,7 +115,9 @@ $$
 This is the same for green and blue as well. However, we must make sure to normalize our result in the range [0, 1] to work with the linearization process. Thus we now obtain 
 a true brightness formula to compute genuine luminance rather than an approximation. 
 
-### Sobel Filter
+</Collapsible>
+
+<Collapsible title="Sobel Filter">
 
 Now that we have discussed brightness, we can discuss how the image’s brightness changes, as a gradient. This allows us to detect edges within an image. Let $B(x, y)$ be the 
 continuous brightness function of the image, then the direction and rate of change of brightness is given by:
@@ -156,7 +159,9 @@ $$
 edge = |\nabla B(x, y)| = \sqrt{{G_x(x, y)}^2 + {G_y(x, y)}^2}
 $$
 
-### **Centroidal Voronoi Diagrams & Lloyd Relaxation**
+</Collapsible>
+
+<Collapsible title="Centroidal Voronoi Diagrams & Lloyd Relaxation">
 
 In 1957, an engineer at Bell Labs named Stuart Lloyd was wrestling with a problem that, on its face, has nothing to do with images, points, or geometry at all. Telephone engineers 
 wanted to digitize analog voice signals, take any smoothly varying voltage and represent it discretely with finite values. However, too few levels, and the reconstructed voice sounds 
@@ -197,7 +202,9 @@ it unchanged.
 
 Table Here
 
-### Program
+</Collapsible>
+
+<Collapsible title="Program">
 
 Now that we have fully defined our density equation as: 
 
@@ -367,13 +374,17 @@ plt.show()
 
 Image here
 
-### Summary
+</Collapsible>
+
+<Collapsible title="Summary">
 
 Starting from a single photograph, we built a significance field out of two humble signals: how dark a pixel is, and how sharply it disagrees with its neighbors. From there, weighted random sampling turned that 
 field into a scatter of points, Lloyd relaxation cleaned up the worst of the clumping without erasing the pattern, and a final Voronoi tessellation turned those points into the mosaic itself. The whole pipeline 
 never once asked what it was looking at, it had no idea it just spent most of its points on a dog's eyes rather than a blanket, only that the eyes were dark and edgy. That's both the charm and the limit of 
 adaptive sampling: it's fast, general, and works on any image you hand it, but it's blind to meaning. In the next section, we introduce Meta's Segment Anything Model, which trades some of that generality for 
 genuine object-level understanding, where we tell the algorithm to start becoming specific.
+
+</Collapsible>
 
 ## Segment Anything Model (SAM)
 
@@ -404,7 +415,7 @@ itself, it relies less and less on human intervention, and improves at an expone
 images, and yet that is *still* small compared to how many distinct objects exist in the world, which is exactly why zero shot generalization matters so much for a task this open-ended. However, only with that 
 ability to adapt to any task, can we adapt it to this project and selectively “mosaic-fy” any item we wish!
 
-### Promptable Segmentation
+<Collapsible title="Promptable Segmentation">
 
 The first part of the process begins with the prompt. The user inputs what they want to segment, through the process of describing an object with words, a click, or even an automatic mask of everything in the 
 image! But how does a machine understand what the prompt, especially a human sentence, means? In essence, a promptable segmentation model is a function that takes a user $I$ image and $p$ prompt, feeding it 
@@ -417,7 +428,9 @@ $$
 This differs from a normal “specialized” segmentation model $N = f_\beta(I)$ which only takes in $I$, and identifies on a specific set of pre-trained labels. For a promptable segmentation model, the labels are 
 the user’s prompt, $p$, which allows a user to specify any subject they wish within one model!
 
-### Image Encoder
+</Collapsible>
+
+<Collapsible title="Image Encoder">
 
 #### Part 1
 
@@ -507,7 +520,9 @@ $$
 Which represents a 64×64 grid of 256-dimensional embeddings, one per patch, each one now informed by the entire image, not just its own small corner. Importantly, this entire process of patch cutting, embedding, 
 the many attention iterations, runs exactly once per image before a prompt is taken into consideration.
 
-### Prompt Encoder
+</Collapsible>
+
+<Collapsible title="Prompt Encoder">
 
 A point prompt starts as a pixel coordinate, an (x, y) vector, but a strange one to handle a network directly. Two nearby coordinates, say (x+1, y) and (x+2, y), differ by a single unit, but their corresponding 
 pixels could call for entirely different masks. If we fed raw coordinates straight into a linear layer the way we fed patch pixels into $W_e$, the network would have to somehow learn to notice extremely small 
@@ -547,35 +562,57 @@ $$
 
 Rather than building a separate encoder for an entirely different prompt shape, SAM just teaches two more tokens, what "top-left corner" and "bottom-right corner" mean, and reuses the same pipeline.
 
-### Mask Decoder, Ambiguity, and Multi-Mask Output
+</Collapsible>
 
-By now we have built two separate pieces, the function $E$, the 64×64 grid of patch embeddings from the 4.3, and the prompt token we built in 4.4 that locates our target. In order to put the puzzle pieces together however, we use a Mask Decoder that allows these to talk to each other, using the attention formula we already derived:
+<Collapsible title="Mask Decoder, Ambiguity, and Multi-Mask Output">
+
+By now we have built two separate pieces, the function $E$, the 64×64 grid of patch embeddings from the 4.3, and the prompt token we built in 4.4 that locates our target. In order to put the puzzle pieces together however, we use a Mask 
+Decoder that allows these to talk to each other, using the attention formula we already derived:
 
 $$
 Attention(Q, K, V) = softmax\left(\frac{Q K^T}{\sqrt{d}}\right) \cdot V
 $$
 
-It does this in a fixed three step order, repeated twice. First, the prompt tokens attend to each other, i.e. self-attention, exactly as in 4.3, just among the handful of prompt tokens (or often a single token) rather than the 4,096 image patches. This lets a background point cancel out a nearby foreground point's influence before either one even looks at the image. Second, the prompt tokens attend into the image embedding, cross attention, where the query vectors now come from the prompt tokens but the keys and values come from the function $E$, pulling in whatever visual detail is relevant to what was clicked. Third, the image tokens attend back out to the prompt tokens, letting the whole image representation absorb what the prompt was asking for. Run this three step exchange twice, and the decoder is done talking to itself.
+It does this in a fixed three step order, repeated twice. First, the prompt tokens attend to each other, i.e. self-attention, exactly as in 4.3, just among the handful of prompt tokens (or often a single token) rather than the 4,096 image 
+patches. This lets a background point cancel out a nearby foreground point's influence before either one even looks at the image. Second, the prompt tokens attend into the image embedding, cross attention, where the query vectors now come 
+from the prompt tokens but the keys and values come from the function $E$, pulling in whatever visual detail is relevant to what was clicked. Third, the image tokens attend back out to the prompt tokens, letting the whole image representation 
+absorb what the prompt was asking for. Run this three step exchange twice, and the decoder is done talking to itself.
 
-Mixed in among the prompt tokens for this entire exchange are a handful of extra tokens that don't represent any point or box at all, we call them “output tokens”. They start as generic, freshly initialized vectors, and their only role is to sit through the same attention process as everything else, quietly absorbing information about the image and the prompt as they go. By the end, each output token holds a compressed description of the best candidate answer. The concluding step, comparing that token against every one of the other 4,096 image tokens, expands it back out into an actual pixel by pixel mask.
+Mixed in among the prompt tokens for this entire exchange are a handful of extra tokens that don't represent any point or box at all, we call them “output tokens”. They start as generic, freshly initialized vectors, and their only role is 
+to sit through the same attention process as everything else, quietly absorbing information about the image and the prompt as they go. By the end, each output token holds a compressed description of the best candidate answer. The concluding 
+step, comparing that token against every one of the other 4,096 image tokens, expands it back out into an actual pixel by pixel mask.
 
-There’s still a problem originating from our prompt though, causing ambiguity in our answer. When you use a point prompt, the same point can refer to a multitude of items. Clicking on a car tire could refer to the car, the tire, the treads, or the bolts on the side. Instead of forcing one output token to somehow encode a single "correct" answer, SAM uses three of them, plus a fourth dedicated purely to scoring. Each of the three tokens are pre-trained, and specialize towards different scales, for sub parts, a part, or the whole object. Because of how they’re trained, for any given training example, only the best-matching of the three candidates gets reinforced, never all three averaged against the same target. That's what lets the three specialize into genuinely different answers instead of collapsing into three copies of the same blurry compromise due to averaging. The fourth token's job is separate and simpler: predict numerically, how good each of the three candidate masks are. It acts as an estimate trained against the real overlap score, and exactly the number the code calls the “score”.
+There’s still a problem originating from our prompt though, causing ambiguity in our answer. When you use a point prompt, the same point can refer to a multitude of items. Clicking on a car tire could refer to the car, the tire, the treads, 
+or the bolts on the side. Instead of forcing one output token to somehow encode a single "correct" answer, SAM uses three of them, plus a fourth dedicated purely to scoring. Each of the three tokens are pre-trained, and specialize towards 
+different scales, for sub parts, a part, or the whole object. Because of how they’re trained, for any given training example, only the best-matching of the three candidates gets reinforced, never all three averaged against the same target. 
+That's what lets the three specialize into genuinely different answers instead of collapsing into three copies of the same blurry compromise due to averaging. The fourth token's job is separate and simpler: predict numerically, how good each 
+of the three candidate masks are. It acts as an estimate trained against the real overlap score, and exactly the number the code calls the “score”.
 
-### Refining
+</Collapsible>
 
-Refinement isn’t really a new mechanism added on to the model, but just the same mask decoder from 4.5 but ran another time, with two small changes. The first change is easy, a second point handled exactly like the first, just one more token added to the prompt.
+<Collapsible title="Refining">
 
-The second change is a bit more nuanced. Beyond points, boxes, and text, SAM supports a fourth kind of prompt: a dense mask. A full-resolution rough sketch, meant for a person to draw as a hint about roughly where the object is. Refinement reuses this exact process, except the "rough sketch" isn't drawn by a person, but the model's own previous output. Recall from 4.5 that before thresholding into a hard mask, the decoder's raw output is a continuous, pixel by pixel score called logits: not yet a yes or no answer, but a field that still carries the model's uncertainty. The field is high where it's confident an object is present, low where it's confident it isn't. Feeding that back in as a mask-type prompt is mechanically no different from a person sketching a rough hint by hand, shown in the function:
+Refinement isn’t really a new mechanism added on to the model, but just the same mask decoder from 4.5 but ran another time, with two small changes. The first change is easy, a second point handled exactly like the first, just one more token 
+added to the prompt.
+
+The second change is a bit more nuanced. Beyond points, boxes, and text, SAM supports a fourth kind of prompt: a dense mask. A full-resolution rough sketch, meant for a person to draw as a hint about roughly where the object is. Refinement 
+reuses this exact process, except the "rough sketch" isn't drawn by a person, but the model's own previous output. Recall from 4.5 that before thresholding into a hard mask, the decoder's raw output is a continuous, pixel by pixel score called 
+logits: not yet a yes or no answer, but a field that still carries the model's uncertainty. The field is high where it's confident an object is present, low where it's confident it isn't. Feeding that back in as a mask-type prompt is mechanically 
+no different from a person sketching a rough hint by hand, shown in the function:
 
 $$
 M_{t+1},\ logits_{t+1} = Dec\left(E + Conv(logits_t),\ Enc_{prompt}(P_t)\right)
 $$
 
-where $Conv(logits_t)$ shrinks last round's heat map down and mixes it directly into the image embedding $E$. It doesn’t get turned into a token sitting alongside the points, but blended into the image side itself, the same way $pos_i$ got blended into a patch embedding back in 4.3. By the time round $t+1$ runs, $E$ already carries a rough memory of where the object was. The new point in $P_t$ just needs to nudge that memory, not rebuild it from a blank page. Add a foreground point to claim territory the model was too conservative about, or a background point to carve out something it was too generous with, and the correction only has to account for what changed.
+where $Conv(logits_t)$ shrinks last round's heat map down and mixes it directly into the image embedding $E$. It doesn’t get turned into a token sitting alongside the points, but blended into the image side itself, the same way $pos_i$ got blended 
+into a patch embedding back in 4.3. By the time round $t+1$ runs, $E$ already carries a rough memory of where the object was. The new point in $P_t$ just needs to nudge that memory, not rebuild it from a blank page. Add a foreground point to 
+claim territory the model was too conservative about, or a background point to carve out something it was too generous with, and the correction only has to account for what changed.
 
 With this understanding of the backend, we can build up our mask encoder and apply our Voronoi Mosaic selectively.
 
-### Program
+</Collapsible>
+
+<Collapsible title="Program">
 
 As with adaptive sampling, we need a few libraries before starting. This time we can include Meta's own *segment-anything* package and a pretrained checkpoint, which is a few gigabytes, so expect the download to take a moment.
 
@@ -586,7 +623,8 @@ As with adaptive sampling, we need a few libraries before starting. This time we
 !wget -q -O sam_vit_h.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
 ```
 
-SAM's own demo image is more useful here than another shot of the puppy, a truck gives us hard edges, flat panels, and a clean background, which makes it easier to see exactly what a point prompt does and doesn't capture. One step to note however, OpenCV loads images in BGR channel order, not RGB, so we need to flip that before doing anything else.
+SAM's own demo image is more useful here than another shot of the puppy, a truck gives us hard edges, flat panels, and a clean background, which makes it easier to see exactly what a point prompt does and doesn't capture. One step to note however, 
+OpenCV loads images in BGR channel order, not RGB, so we need to flip that before doing anything else.
 
 ```python
 import cv2
@@ -615,7 +653,8 @@ predictor = SamPredictor(sam)
 predictor.set_image(image)
 ```
 
-With the image embedded, a single call to `predict()` runs the cheap half of the network, the prompt encoder and mask decoder from 4.4 and 4.5. Remember that an ambiguous prompt gets three candidate masks back, so we ask for all three and keep the one with the highest score.
+With the image embedded, a single call to `predict()` runs the cheap half of the network, the prompt encoder and mask decoder from 4.4 and 4.5. Remember that an ambiguous prompt gets three candidate masks back, so we ask for all three and keep the 
+one with the highest score.
 
 ```python
 masks, scores, logits = predictor.predict(
@@ -630,7 +669,8 @@ best_mask = masks[best_idx].astype(bool)
 
 *Figure — three candidate masks with scores, best one highlighted*
 
-One point on a truck's cab is ambiguous in exactly the way 4.2 and 4.5 described. If the best mask stops short of the full truck, we refine rather than restart, exactly as in 4.6: pass the previous logits back in as a warm start, and add a second foreground point further along the truck bed.
+One point on a truck's cab is ambiguous in exactly the way 4.2 and 4.5 described. If the best mask stops short of the full truck, we refine rather than restart, exactly as in 4.6: pass the previous logits back in as a warm start, and add a second 
+foreground point further along the truck bed.
 
 ```python
 refined_points = np.array([[500, 375], [1125, 625]])
@@ -648,7 +688,8 @@ final_mask = refined_masks[0].astype(bool)
 
 *Figure — refined mask overlay on the truck*
 
-From mask to mosaic. With `final_mask` in hand, everything from Section 3 becomes available again, just restricted to a shape instead of a rectangle. `srgb_to_linear`, `r_lin`/`g_lin`/`b_lin`, and the Sobel gradient from 3.5 all carry over unchanged. The only new line is the one that matters, multiplying the density field by the mask, so every pixel outside the truck drops to zero density and can never be sampled.
+From mask to mosaic. With `final_mask` in hand, everything from Section 3 becomes available again, just restricted to a shape instead of a rectangle. `srgb_to_linear`, `r_lin`/`g_lin`/`b_lin`, and the Sobel gradient from 3.5 all carry over unchanged. 
+The only new line is the one that matters, multiplying the density field by the mask, so every pixel outside the truck drops to zero density and can never be sampled.
 
 ```python
 luminance = 0.2126*r_lin + 0.7152*g_lin + 0.0722*b_lin
@@ -671,7 +712,8 @@ rng = np.random.default_rng(123)
 pts = sample_points_from_density(p, N=4000, rng=rng)
 ```
 
-Relaxation is the same story, almost. `lloyd_box_step` from 3.5 still works unchanged, it just moves each point to the geometric centroid of its own Voronoi cell within the image's bounding box. But "within the bounding box" is exactly the problem here: a centroid can legally sit inside that rectangle while sitting outside our curved mask, in the empty space beside the truck. Left alone, a few points drift there every iteration and never come back.
+Relaxation is the same story, almost. `lloyd_box_step` from 3.5 still works unchanged, it just moves each point to the geometric centroid of its own Voronoi cell within the image's bounding box. But "within the bounding box" is exactly the problem 
+here: a centroid can legally sit inside that rectangle while sitting outside our curved mask, in the empty space beside the truck. Left alone, a few points drift there every iteration and never come back.
 
 The fix is a nearest-inside-pixel lookup, computed once with a distance transform: for every pixel outside the mask, it tells us the coordinates of the closest pixel that's inside.
 
@@ -696,9 +738,12 @@ for _ in range(2):
     relaxed = project_to_mask(relaxed, final_mask, ix, iy)
 ```
 
-The last step needs its own idea, not just a reused one. Filling explicit Voronoi polygons, like we did back in 3.5, means clipping each cell against a boundary. The thing is, clipping against a rectangle, the image edge, is easy, but clipping against an arbitrary curved mask boundary can be a real challenge geometrically that won’t be solved by an if statement.
+The last step needs its own idea, not just a reused one. Filling explicit Voronoi polygons, like we did back in 3.5, means clipping each cell against a boundary. The thing is, clipping against a rectangle, the image edge, is easy, but clipping against 
+an arbitrary curved mask boundary can be a real challenge geometrically that won’t be solved by an if statement.
 
-So instead of building polygons at all, go back to the actual definition of a Voronoi cell from Section 2: the set of points closer to one generator than to any other. That's a rule about individual points, not about polygons, nothing requires us to express it as a shape. We can ask the question one pixel at a time, for every pixel inside the mask, which of our relaxed points is nearest? We answer that with a spatial lookup structure, a k-d tree makes this fast even for a few thousand points, and the result is, by definition, the correct Voronoi partition, automatically clipped to the mask, because we only ever asked the question for pixels already inside it.
+So instead of building polygons at all, go back to the actual definition of a Voronoi cell from Section 2: the set of points closer to one generator than to any other. That's a rule about individual points, not about polygons, nothing requires us to 
+express it as a shape. We can ask the question one pixel at a time, for every pixel inside the mask, which of our relaxed points is nearest? We answer that with a spatial lookup structure, a k-d tree makes this fast even for a few thousand points, 
+and the result is, by definition, the correct Voronoi partition, automatically clipped to the mask, because we only ever asked the question for pixels already inside it.
 
 ```python
 from scipy.spatial import cKDTree
@@ -726,89 +771,8 @@ plt.show()
 
 *Figure — final masked Voronoi mosaic of the truck*
 
-The truck comes out tiled in exactly the same spirit as the puppy did, dense where the density field says there's detail, sparse where it doesn't. However, now that detail only exists where SAM told us to look. Section 3 taught the algorithm where to place points; Section 4 gave us a system on where to stop.
+The truck comes out tiled in exactly the same spirit as the puppy did, dense where the density field says there's detail, sparse where it doesn't. However, now that detail only exists where SAM told us to look. Section 3 taught the algorithm where 
+to place points; Section 4 gave us a system on where to stop.
 
-{/*
-========================================================================
-NOTE FROM CLAUDE — proofreading pass. Read and DELETE this whole block.
-(It is wrapped in an MDX comment so it will NOT render on the site.)
-========================================================================
-
-The good news first: I checked every concept, formula, and code line and
-the substance is correct. Rec.709 luminance weights, the sRGB linearize
-constants (0.04045 / 12.92 / 1.055 / 2.4), both Sobel kernels, the ViT
-patch arithmetic (1024/16 = 64, so 4096 tokens = a 64x64 grid, 16x16x3 =
-768 numbers per patch, final 64x64x256 embedding), the SA-1B figures
-(11M images, 1.1B masks), random Fourier features, encoding a box as two
-labelled corner tokens, three mask tokens plus one IoU/score token, the
-"loss only through the best-matching mask" detail, and the SamPredictor
-API usage (set_image once, predict cheap, mask_input = logits[best_idx]
-warm start, distance_transform_edt index order, cKDTree nearest lookup)
-are all theoretically sound. Coordinate ordering in the code is
-consistent throughout (x = column, y = row).
-
-Things worth a look, most to least important:
-
-1. REFINING EQUATION vs YOUR PROSE (real inconsistency).
-   The equation reads Dec(E, Enc_prompt(P_t) + Conv(logits_t)) — i.e. the
-   convolved mask is added to the PROMPT encoding. But your prose (which
-   is the correct account of how SAM works) says the mask is blended into
-   the IMAGE side E, "not a token sitting alongside the points." The two
-   disagree. To match the prose and SAM's real design, move the term:
-   M_(t+1), logits_(t+1) = Dec( E + Conv(logits_t), Enc_prompt(P_t) ).
-
-2. BRIGHTNESS FILTER TYPO (Adaptive Sampling section, unchanged by me).
-   The sentence reads "But why R_lin, G_lin, and G_lin?" — the third one
-   should be B_lin. Right now G_lin appears twice.
-
-3. CENTROID DISPLAY EQUATION (Adaptive Sampling > Program).
-   The shoelace centroid is written as one mashed line mixing x and y:
-   "c_x, c_y = 1/(6A) sum (x_i, y_i + x_(i+1), y_(i+1)) (...)". It is hard
-   to read and not quite well-formed. Your CODE (polygon_centroid) is
-   correct; the display math is the only issue. Suggest two clean lines:
-     C_x = 1/(6A) sum (x_i + x_(i+1)) (x_i y_(i+1) - x_(i+1) y_i)
-     C_y = 1/(6A) sum (y_i + y_(i+1)) (x_i y_(i+1) - x_(i+1) y_i)
-   with A = 1/2 sum (x_i y_(i+1) - x_(i+1) y_i).
-
-4. DENSITY NAMING across the two Program sections (cosmetic, same result).
-   Adaptive Sampling defines: brightness = 1.0 - luminance, then
-   density = 0.6*brightness + 0.4*edge. The SAM Program writes it inline:
-   density = 0.6*(1.0 - luminance) + 0.4*edge. Numerically identical, but
-   the variable literally named "brightness" in the first block actually
-   holds darkness (1 - luminance). Might unify the naming to avoid a
-   double-take.
-
-5. IMAGE ENCODER symbol (minor). The projection equation is labelled
-   E_image, but the next sentence calls the per-patch result e_i, and E is
-   later the whole-image tensor. Using e_i in that first equation would
-   read more consistently.
-
-6. INTEGRAL NOTATION (minor, pre-existing, Lloyd/CVT section). The CVT
-   centroid and distortion integrals write V(p_i) as a factor inside the
-   integrand. V(p_i) is the region you integrate OVER, so it is cleaner as
-   a subscript on the integral sign than a multiplied term. Purely
-   cosmetic; the meaning is clear.
-
-7. COLOR LOOKUP safety (code, low priority). gen_colors indexes image at
-   the relaxed points without clipping to [0, W-1] / [0, H-1].
-   project_to_mask keeps them inside the mask in practice, so it is fine,
-   but a np.clip on x and y there would be a cheap guard against a stray
-   out-of-bounds index.
-
-Conversion choices I made in THIS section (flag if you disagree):
-- The three "Figure — ..." lines are YOUR draft's figure descriptions,
-  kept as italic placeholders (I dropped the square brackets so MDX does
-  not try to read them as links). Swap them to your "Image Here" style if
-  you prefer uniformity with the earlier sections.
-- The install cell (!pip / !wget) is fenced as python to match the rest
-  of the chapter (notebook cells). Change to bash if you would rather.
-- Kept all section cross-references verbatim (3.5, 4.2-4.6, Section 2/3)
-  as you asked. Reminder: these numbers are the DRAFT's numbering and do
-  not appear as numbers in the rendered headings, so a reader on the site
-  has nothing to map "4.5" onto. Worth deciding before publish.
-
-I did NOT edit any of your prose or math directly (beyond the LaTeX/code
-cleanup we agreed on for the conversion). Everything above is yours to
-accept or ignore.
-*/} 
+</Collapsible>
 
