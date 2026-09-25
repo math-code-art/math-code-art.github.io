@@ -417,12 +417,27 @@ h1 { margin-bottom: 0.75rem; }
   font-style: italic;
   margin: 0 0 1rem;
 }
-.book-content :global(code) {
+/* Inline code only (not code inside a ```` ``` ```` block) gets the pill background. */
+.book-content :global(:not(pre) > code) {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0.1em 0.35em;
   font-size: 0.88em;
+}
+/* Fenced code blocks: keep Shiki's dark theme; no light box behind the tokens. */
+.book-content :global(pre) {
+  padding: 1rem 1.15rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin: 0 0 1.25rem;
+  line-height: 1.55;
+}
+.book-content :global(pre code) {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.85em;
 }
 .book-content :global(img) {
   border: 1px solid var(--border);
