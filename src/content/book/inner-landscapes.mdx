@@ -7,3 +7,39 @@ sourceExhibition: "inner-landscapes"
 groundsIn: ["coordinate-networks-cppn", "random-walk-painting"]
 ---
 
+## Abstract
+
+This chapter introduces *Inner Landscapes*, a system for turning music and a still reference image into a moving digital painting. The system first turns the music into numerical features. It then uses those features to train a neural network to predict image colors at different image locations and visual scales. Finally, random walkers move across a canvas and leave strokes whose colors come from the trained neural network. As the music changes, the painting changes in scale, movement, stroke style, and color, creating a connection between sound, image, and emotion.
+
+### Chapter Goals
+
+By the end of this chapter, you should:
+
+- Understand the main problem of turning music and a reference image into a moving painting
+- Know how sound becomes music features through a Mel spectrogram and how those features choose visual scale
+- Understand how a neural network learns a color rule from image location, music features, and zoom targets
+- Know what a random walk is and how it turns color predictions into a moving painting over time
+
+## Introduction
+
+Listen to a piece of music and it is easy to imagine something beyond the sound itself. A quiet passage may feel calm and distant. A sudden loud passage may feel bright, fast, tense, or excited. We often connect sound with images, movement, and emotion even though none of these things are actually visible in the music. This chapter begins with that simple observation: can we use a computer to turn some of these imagined connections into a moving painting?
+
+In *Inner Landscapes*, each piece begins with a reference image chosen to represent an emotional state such as calm, anxiety, nostalgia, grief, or joy. The image gives the painting its visual world. The music gives the painting a changing source of motion and feeling. Instead of showing the image as a still picture, we want the image to appear closer or farther away, and we want marks to build up over time as the music plays.
+
+![The basic artistic problem in Inner Landscapes, illustrated with a Grief example](/book/inner-landscapes/inner_landscapes_intro.png)
+
+*Figure 1. The basic artistic problem in Inner Landscapes, shown with a Grief example: combine a reference image with music to create frames of a final moving painting. This figure shows the goal before we study the technical pieces that make it possible.*
+
+Figure 1 shows the project at the level of an artist's question. We begin with something visual and something musical, and we want the final result to feel like both of them at once. The rest of the chapter explains how the computer builds that connection step by step.
+
+A useful starting point is [*NeuroMV: A Neural Music Visualizer*](https://kayoyin.github.io/blog/post/neuromv/), described by Kayo Yin and collaborators in 2022. NeuroMV represents music with a Mel spectrogram and samples music features at video-frame speed. For each frame, it gives a neural network two kinds of information: an image location and the current music features. The network then predicts an RGB color. This matters for our project because it shows a simple but powerful idea: music can become part of the input to an image-making rule.
+
+*Inner Landscapes* uses that idea as a foundation, but not as the whole method. The neural network supplies predicted color, while the random walk supplies marks and movement. Later sections explain the training process, zoom targets, image-region information, and rendering steps in detail. For now, the important point is that the project needs both a learned color rule and a way to turn that rule into a painting over time.
+
+A neural network is a computer model that learns from examples. At first, it does not know the right colors for the image. During training, it makes guesses, compares those guesses with target colors, and adjusts itself so that future guesses become closer. In this chapter, the neural network learns a color rule: given an image location $(x,y)$ and the current music features, predict an RGB color.
+
+However, predicting colors is not the same as making a painting. A painting also needs marks, movement, and time. For that part, we use a random walk. A random walk is a path made from many small steps. Each step continues from the current position, but its direction can change. In *Inner Landscapes*, many virtual walkers move across the canvas. As they move, they leave colored strokes behind them. The neural network chooses the stroke color, while the music and image-region information help control how the walkers move and how visible their strokes are.
+
+> **Key Distinction:** The neural network does not draw the path. It predicts a color from an image location and current music features. The random walk creates the path of marks across the canvas. Together, they turn color prediction into a moving painting.
+
+The challenge is that a computer cannot begin with a feeling such as calm or nostalgia. It needs a clear sequence of numerical steps. We must turn music into numbers, connect those numbers to image locations, train a neural network, and then use random walks to draw the final frames. The next section gives the complete map of this system.
