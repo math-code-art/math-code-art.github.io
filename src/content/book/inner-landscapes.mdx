@@ -470,6 +470,424 @@ The canvas is not cleared between frames. Each new stroke is added on top of the
 
 Figure 9 shows this time-based behavior. The reference image gives the visual world, the spectrogram gives changing music features, and the random walkers turn those features into accumulated marks. After the painter saves all frames, the frames are combined with the audio to create the final video.
 
+## Program
+
+The Methodology section explained the ideas. This section connects those ideas to the actual program. The goal is not to memorize every line of code. The goal is to know where each part of the system happens and how data moves from one file to the next.
+
+The code is organized around three main files:
+
+| File | Main job |
+| --- | --- |
+| `neural_network_music.py` | train the neural color model and save checkpoints |
+| `random_walk_image.ipynb` | load checkpoints, choose audio clips, and start rendering |
+| `RWraw.py` | run the random-walk painter and save frames |
+
+The real implementation follows the engineering workflow introduced earlier:
+
+**training -> checkpoint -> notebook integration -> `RW_Painter` rendering -> frames -> final video.**
+
+This is the code-level version of the conceptual workflow. The conceptual workflow tells us what the system means. The code workflow tells us where the files hand information to one another.
+
+### Training the Neural Color Model
+
+Training happens in `neural_network_music.py`. This file contains the audio-feature functions, the zoom-level functions, the neural network class, the training loop, and the checkpoint-saving step.
+
+The training jobs are stored in a dictionary. Each job gives the program the main files and settings needed for one emotion:
+
+```python
+TRAINING_JOBS = {
+    "joy": {
+        "image": "joy.png",
+        "audio": "Joy.wav",
+        "ckpt": "ckpts/joy_ckpt.pt",
+        "zoom_crop_sizes": EMOTION_ZOOM_CROP_SIZES["joy"],
+    },
+}
+```
+
+The full dictionary includes the five emotions used by the project. The important idea is that the same training function can be reused. The program changes the image, audio, checkpoint path, and settings for each emotion, but the basic training procedure stays the same.
+
+At the bottom of the file, the script loops over the training jobs:
+
+```python
+for emotion_name, cfg in TRAINING_JOBS.items():
+    train_emotion_model(
+        emotion_name=emotion_name,
+        image_file=cfg["image"],
+        audio_file=cfg["audio"],
+        ckpt_path=cfg["ckpt"],
+        emotion_zoom_crop_sizes=cfg["zoom_crop_sizes"],
+        emotion_fourier_frequencies=cfg.get("fourier_frequencies"),
+    )
+```
+
+This loop is the start of the training pipeline. For each emotion, it calls `train_emotion_model`. That function prepares the image, prepares the music, trains the model, and saves the checkpoint.
+
+### Building Training Examples
+
+Inside `train_emotion_model`, the first major task is to turn the image and audio into training examples. The image is resized to the training grid:
+
+```python
+H, W = 512, 512
+target_img = Image.open(image_file).convert("RGB").resize((W, H))
+```
+
+The program also creates one coordinate for every pixel location. These coordinates are normalized from $-1$ to $1$, matching the coordinate system explained in the Methodology section.
+
+Next, the audio becomes music features:
+
+```python
+raw_spec = make_mel_spec(audio_file, latent_size, target_fps)
+spectrogram, spec_min, spec_max = normalize_spec(raw_spec)
+```
+
+The first line builds the $64$-bin Mel spectrogram. The second line applies the log transform and normalization. The values `spec_min` and `spec_max` are saved because the notebook must normalize later audio clips in the same way.
+
+The program also computes zoom levels from a separate $96$-bin Mel spectrogram:
+
+```python
+raw_zoom_spec = make_mel_spec(audio_file, p75_zoom_mels, target_fps)
+p75_signal, zoom_levels, edges, percentiles = compute_p75_zoom_levels(
+    raw_zoom_spec, emotion_name, target_fps
+)
+```
+
+The result `zoom_levels` tells the training code which zoom target should be used at each music frame. A frame with a lower zoom level uses a wider target image. A frame with a higher zoom level uses a closer target image.
+
+When the model trains on one music frame, the same music vector is repeated for every image location:
+
+```python
+music_vec = spec_frame.unsqueeze(0).repeat(H * W, 1)
+inp_train = torch.cat([coords, music_vec], dim=1)
+```
+
+This creates the input table described earlier. Each row contains one image location and the current music features. The network can then predict one RGB color for each row.
+
+### Training Loop and Loss
+
+The neural network itself is defined by the class `XYSpecNet`. Its input is the pair of ideas we have been using throughout the chapter: image location and current music features. Its output is a predicted RGB color.
+
+During training, the program repeatedly chooses a sampled music frame, builds the model input, predicts colors, computes the loss, and updates the weights:
+
+```python
+pred = model(inp_train)
+l1 = torch.abs(pred - target_music_tensor)
+l2 = (pred - target_music_tensor) ** 2
+loss = ((0.5 * l1 + 0.5 * l2) * pixel_weights).mean()
+
+loss.backward()
+optimizer.step()
+```
+
+These lines are the code version of the loss and backpropagation discussion. The prediction `pred` is compared with `target_music_tensor`, which contains the target RGB colors from the selected zoom image. The L1 and L2 terms measure color error. The `pixel_weights` term gives extra importance to image locations with stronger edge structure.
+
+The line `loss.backward()` asks PyTorch to compute the derivatives. The line `optimizer.step()` uses those derivatives to update the weights. In this project, the optimizer is Adam with learning rate $0.0005$.
+
+> **Practical Takeaway:** The training script does not paint the final video. It teaches a neural network to answer one question well: given an image location and current music features, what color should be predicted?
+
+### Saving the Checkpoint
+
+After training, the script saves a checkpoint. A checkpoint is the handoff from training to rendering. It stores the trained model weights and the settings needed to rebuild the same model later.
+
+A shortened version of the checkpoint code looks like this:
+
+```python
+torch.save(
+    {
+        "model_state_dict": model.state_dict(),
+        "spec_min": spec_min,
+        "spec_max": spec_max,
+        "zoom_levels": zoom_levels,
+        "zoom_crop_sizes": emotion_zoom_crop_sizes,
+    },
+    ckpt_path,
+)
+```
+
+The real checkpoint stores more fields, including image size, music frame rate, hidden-layer size, Fourier frequencies, loss history, and paths to visual checks. The most important field is `model_state_dict`. It contains the learned weights and biases of the neural network.
+
+The checkpoint is why the rendering notebook does not have to train again. It can rebuild the model, load the saved weights, and continue from the trained color rule.
+
+### Notebook Integration
+
+Rendering begins in `random_walk_image.ipynb`. The notebook imports the trained model class and helper functions from `neural_network_music.py`, and it imports the painter from `RWraw.py`:
+
+```python
+from neural_network_music import XYSpecNet, make_mel_spec, normalize_spec
+from neural_network_music import frames_to_video_with_audio
+from RWraw import RW_Painter
+```
+
+The notebook then loads one checkpoint:
+
+```python
+ckpt = torch.load(ckpt_file, map_location="cpu")
+latent_size = ckpt["latent_size"]
+hidden = ckpt["hidden"]
+target_fps = ckpt["target_fps"]
+```
+
+These values tell the notebook how to rebuild the network. The model must have the same input dimension, hidden size, and Fourier encoding that were used during training.
+
+The notebook rebuilds the neural network and restores its learned weights:
+
+```python
+model = XYSpecNet(
+    spec_dim=input_spec_dim,
+    hidden=hidden,
+    fourier_frequencies=model_fourier_frequencies,
+)
+model.load_state_dict(ckpt["model_state_dict"])
+model.eval()
+```
+
+The call to `model.eval()` puts the model in evaluation mode. In simple terms, the model is no longer learning. It is now being used to make predictions.
+
+The notebook also cuts the selected audio segment and recomputes the music features for that segment:
+
+```python
+make_audio_clip(audio_file, start_sec, end_sec, clip_file)
+raw_spec = make_mel_spec(clip_file, latent_size, target_fps)
+spec, _, _ = normalize_spec(raw_spec, spec_min=spec_min, spec_max=spec_max)
+```
+
+Notice that the same `spec_min` and `spec_max` from training are reused. This keeps the meaning of the music-feature values consistent between training and rendering.
+
+The notebook also slices the saved zoom levels so that the zoom behavior lines up with the chosen audio clip:
+
+```python
+zoom_start_frame = int(round(start_sec * target_fps))
+zoom_levels = full_zoom_levels[
+    zoom_start_frame:zoom_start_frame + num_frames
+]
+```
+
+This step matters because rendering may use only part of the original audio file. The zoom levels must start at the same musical time as the clip.
+
+### RW Painter Rendering
+
+The notebook creates an `RW_Painter`. This object owns the canvas, the walker positions, the walker directions, the image-region map, and the drawing process:
+
+```python
+painter = RW_Painter(
+    model, W_RENDER, H_RENDER,
+    num_walkers=cfg["num_walkers"],
+    emotion_params=emotion_params,
+)
+```
+
+The model gives the painter a way to predict color. The render size gives the painter the canvas size. The walker count and emotion parameters control how many walkers move and how their strokes behave.
+
+Then the notebook starts rendering:
+
+```python
+painter.render(
+    spec=spec,
+    num_frames=num_frames,
+    steps_per_frame=cfg["steps_per_frame"],
+    output_dir=output_dir,
+    target_fps=target_fps,
+    zoom_levels=zoom_levels,
+)
+```
+
+Inside `RWraw.py`, the `render` method loops over the frames. For each frame, it selects the current music features, chooses the active zoom-level region map, computes music intensity, updates every walker, predicts stroke colors with the neural network, and draws lines onto the accumulating canvas.
+
+Each saved frame is named with six digits:
+
+```python
+frame_path = os.path.join(output_dir, f"{f:06d}.png")
+self.canvas.save(frame_path)
+```
+
+This naming pattern is important because video tools expect frames to be in a clean numerical sequence, such as `000000.png`, `000001.png`, and `000002.png`.
+
+### Frames and Final Video
+
+The last step is handled by `frames_to_video_with_audio`. The notebook calls it after all frames have been rendered:
+
+```python
+frames_to_video_with_audio(
+    output_dir=output_dir,
+    output_name=output_name,
+    audio_file=clip_file,
+    target_fps=target_fps,
+)
+```
+
+This helper function uses `ffmpeg` twice. First, it turns the numbered PNG frames into an MP4 video. Then it adds the audio clip to that video. The final result is a video file whose images and audio share the same frame rate and duration.
+
+> **Useful Rule:** In the code, training and rendering are separate. `neural_network_music.py` learns and saves the color rule. `random_walk_image.ipynb` reloads that rule. `RWraw.py` turns the reloaded rule into painted frames.
+
+## Exercises
+
+These exercises are meant to check understanding of the full chapter. Some questions ask for short explanations. Others ask for small calculations using the numbers already introduced. None of them require writing a full neural-network program.
+
+### Sound and Music Features
+
+1. In one or two sentences, explain why the program converts sound into a Mel spectrogram instead of using the raw audio wave directly.
+2. The project uses a target rate of $30$ music frames per second. If an audio file has sample rate $22{,}050$, calculate the hop length.
+3. If one music frame has $64$ Mel values, what is the shape of a spectrogram with $T$ music frames?
+4. Explain the difference between the $64$-bin Mel spectrogram and the $96$-bin Mel spectrogram in this project.
+5. Why does the program use a log transform and normalization before giving music features to the neural network?
+6. In your own words, explain why a single music frame must be paired with image locations before it can be used for color prediction.
+
+### Neural Network and Training
+
+1. During training, the image grid has size $512 \times 512$. How many image locations are in one full grid?
+2. One model input row contains $(x,y)$ and $64$ music values. How many input values are in that row before Fourier coordinate encoding?
+3. Explain what a weight and a bias do inside a neuron.
+4. Why does the network use activation functions between linear layers?
+5. Write the meaning of the expression $\hat{c}_{\theta}(x,y,m_t)$ in words.
+6. Suppose a predicted color channel is $0.7$ and the target color channel is $0.4$. Compute the L1 error, the L2 error, and the combined error $0.5L_1+0.5L_2$ for that one channel.
+7. Why does the training loss use both L1 and L2 error instead of only one of them?
+8. Explain why edge-weighted training gives extra attention to visually important parts of the reference image.
+9. What is backpropagation used for during training?
+10. Name three kinds of information saved in the checkpoint.
+
+### Zoom and Random-Walk Rendering
+
+1. What does a smaller zoom crop size mean visually?
+2. Explain why the program uses percentile thresholds instead of one fixed numerical threshold for every emotion.
+3. A random walker has state $(x_k,y_k,\theta_k)$. What does each part of this state represent?
+4. If a walker starts at $(10,10)$, has direction $\theta=0$, and takes a step of length $5$, what is its new position before any boundary reflection?
+5. If the current music intensity $I_f$ increases, what happens to step length, stroke width, turn variation, and opacity?
+6. A local drawing control is computed as $q_{\text{local}}=r q_{\text{emotion}}+(1-r)q_{\text{detail}}$. If $r=0.25$, $q_{\text{emotion}}=10$, and $q_{\text{detail}}=2$, compute $q_{\text{local}}$.
+7. Why is the canvas not cleared between frames?
+
+### Program Workflow
+
+1. Put these stages in the correct order: notebook integration, final video, training, `RW_Painter` rendering, checkpoint, frames.
+2. Which source file defines `XYSpecNet`?
+3. Which source file defines `RW_Painter`?
+4. Which file loads the checkpoint and starts the rendering process?
+5. If an audio clip lasts $40$ seconds and the target frame rate is $30$ frames per second, about how many frames should be rendered?
+6. Why does the notebook reuse `spec_min` and `spec_max` from the checkpoint when it normalizes the rendering audio clip?
+7. What does `frames_to_video_with_audio` do after all PNG frames have been saved?
+
+## Results
+
+The final output of the project is a video, but a still frame is a useful way to study what the system has produced. A finished frame shows the accumulated canvas after many random-walk strokes have already been drawn. By this point, the frame contains information from the reference image, the trained neural color rule, the selected zoom targets, and the changing music features.
+
+Figure 10 shows one late frame from each final video. These frames should not be read as five isolated pictures. They are snapshots from moving paintings. The visible result at any moment depends on what the music has done up to that time and how the canvas has accumulated previous strokes.
+
+### How to Read the Output
+
+When looking at the results, it helps to ask three concrete questions.
+
+First, what color world does the frame use? The Joy frame is dominated by pale yellows, greens, and blue-gray wave shadows. The Calm frame uses mostly cool blues and soft green highlights. The Anxiety frame contains stronger dark reds, browns, and high-contrast light areas. The Grief frame is mostly deep blue with vertical yellow reflections. The Nostalgia frame uses warm browns, golds, and muted skin tones. These differences come first from the reference images and the colors learned by the neural network.
+
+Second, where is the image structure clear? In the Joy frame, the wave forms remain visible even though the marks are loose. In Calm and Nostalgia, the face and head shape are still readable. In Anxiety, the strongest visual structure appears in large rectangular boundaries and dark bands. In Grief, the clearest structure is the horizontal horizon and the vertical reflections in the water. This shows that the system does not erase the reference image. It transforms the image into a stroke-based version of itself.
+
+Third, what kind of mark texture appears? Some regions are smooth because many translucent strokes have blended together. Other regions show scribbled lines, short angular marks, or thicker accumulated areas. These textures come from the random-walk painter. The neural network predicts color, but the random walkers decide where strokes are laid down and how they accumulate over time.
+
+<div class="inner-landscapes-results-grid">
+  <figure>
+    <img src="/book/inner-landscapes/inner_landscapes_result_joy.png" alt="Late frame from the Joy video" />
+    <figcaption>Joy</figcaption>
+  </figure>
+  <figure>
+    <img src="/book/inner-landscapes/inner_landscapes_result_calm.png" alt="Late frame from the Calm video" />
+    <figcaption>Calm</figcaption>
+  </figure>
+  <figure>
+    <img src="/book/inner-landscapes/inner_landscapes_result_anxiety.png" alt="Late frame from the Anxiety video" />
+    <figcaption>Anxiety</figcaption>
+  </figure>
+  <figure>
+    <img src="/book/inner-landscapes/inner_landscapes_result_grief.png" alt="Late frame from the Grief video" />
+    <figcaption>Grief</figcaption>
+  </figure>
+  <figure>
+    <img src="/book/inner-landscapes/inner_landscapes_result_nostalgia.png" alt="Late frame from the Nostalgia video" />
+    <figcaption>Nostalgia</figcaption>
+  </figure>
+</div>
+
+*Figure 10. Late frames from five final videos. Each frame is produced by the same workflow, but the reference image, audio features, zoom behavior, and rendering settings lead to different color ranges, stroke textures, and image structures.*
+
+> **How to Read a Result:** Do not judge only by the emotional label. Look for visible evidence: color range, readable image structure, stroke density, scale, and how much the canvas has accumulated. These are the signs that connect the result back to the method.
+
+### What the Results Show
+
+The results show that the system can turn a still reference image into a moving painting without simply playing the original image as a slideshow. The reference image remains recognizable, but it is rebuilt from many small strokes. This is important because the project is not only about image generation. It is about a painting process that unfolds with music.
+
+The results also show the difference between color learning and painting. The neural network gives the painter a color rule. It helps the system choose colors that belong to the reference image at each location and music frame. The random walk gives the result its visible motion and texture. Because the canvas is not cleared between frames, marks accumulate and the image becomes denser as the video continues.
+
+A single still frame cannot show everything. The final video also contains zoom changes, changes in walker speed, changes in stroke width, and changes in opacity. Those time-based changes are connected to the music features. Therefore, the most complete way to read the output is to compare both a still frame and the moving video: the frame shows the accumulated painting, while the video shows how the painting arrives there.
+
+## Summary
+
+*Inner Landscapes* begins with a simple artistic goal: combine a reference image and a piece of music into a moving painting. To make that goal possible, the project turns both image and music into forms a computer can use.
+
+The music is converted into Mel spectrogram features. A $64$-bin version supplies the current music features for the neural network, and a $96$-bin version helps choose the zoom level. The reference image is prepared at different visual scales so the model can learn how color should change when the selected zoom target changes.
+
+The neural network learns a color rule. Its input is an image location together with the current music features. Its output is a predicted RGB color. During training, the model compares predicted colors with target image colors, uses L1 and L2 loss to measure error, and updates its weights with backpropagation. The checkpoint stores the trained model and the information needed to rebuild the same color rule later.
+
+During rendering, the notebook loads the checkpoint and passes the model to `RW_Painter`. The painter uses random walkers to create strokes on a larger canvas. The neural network supplies stroke colors, while music intensity and image-region information guide movement, opacity, width, and local drawing behavior. Saved frames are finally combined with the audio to make the final video.
+
+The complete workflow is therefore:
+
+**training -> checkpoint -> notebook integration -> `RW_Painter` rendering -> frames -> final video.**
+
+The central lesson of the chapter is that the final artwork is not produced by one technique alone. It comes from the connection between sound features, learned color prediction, visual scale, random-walk motion, and frame-by-frame accumulation.
+
+## Appendix
+
+### File Map
+
+The main chapter explains the ideas in a teaching order. The program itself is organized by files. The following table gives a compact map for review.
+
+| File | Role in the workflow |
+| --- | --- |
+| `neural_network_music.py` | Builds Mel spectrograms, computes zoom levels, defines `XYSpecNet`, trains the neural color model, saves checkpoints, and contains the video-combining helper. |
+| `random_walk_image.ipynb` | Loads a checkpoint, chooses the audio clip and render settings, rebuilds the model, prepares music features for the selected clip, creates `RW_Painter`, and starts rendering. |
+| `RWraw.py` | Defines `RW_Painter`. This class manages walkers, predicts colors with the trained model, uses image-region information, draws strokes, and saves numbered PNG frames. |
+
+*Table 1. Main source files used by the Inner Landscapes workflow.*
+
+### Core Settings
+
+The following settings are useful when checking whether an explanation, figure, or result matches the implementation.
+
+| Setting | Value or meaning |
+| --- | --- |
+| Training image grid | $512 \times 512$ locations |
+| Rendering canvas | $1080 \times 1080$ pixels in the notebook render setup |
+| Target frame rate | $30$ frames per second for music features and video frames |
+| Neural-network music features | $64$ Mel values per music frame |
+| Zoom-decision spectrogram | $96$ Mel values per music frame |
+| Fourier coordinate frequencies | Most emotions use $1,\ 2,\ 4,\ 8,\ 16$; Nostalgia also uses $32$ |
+| Model output | Three RGB values between $0$ and $1$ |
+| Final frame format | Numbered PNG files such as `000000.png`, `000001.png`, and so on |
+| Final video step | The saved frames are combined with the selected audio clip |
+
+*Table 2. Core settings used throughout the chapter.*
+
+### Reproduction Checklist
+
+To reproduce the project, follow the same order as the real workflow.
+
+1. Prepare the reference image and audio file for each emotion.
+2. Run the training script so the program can build music features, select zoom targets, train `XYSpecNet`, and save a checkpoint.
+3. Confirm that the checkpoint exists before rendering.
+4. Open the notebook and choose the emotion, audio segment, and render settings.
+5. Let the notebook load the checkpoint, rebuild the model, normalize the clip's music features with the saved values, and create `RW_Painter`.
+6. Render the numbered PNG frames.
+7. Combine the frames with the audio clip to create the final video.
+
+### Common Problems to Check
+
+| Problem | What to check |
+| --- | --- |
+| The notebook skips an emotion | The checkpoint path may be missing. Run the training script for that emotion first. |
+| The colors look wrong | Check that the notebook uses the saved `spec_min` and `spec_max` from the checkpoint when normalizing the rendering clip. |
+| The output does not respond clearly to music | Check that the selected audio segment has enough changing spectrogram energy and that the zoom levels are being sliced for the same time segment. |
+| The painting looks too empty early in the video | Remember that the canvas accumulates over time. Early frames naturally contain fewer marks than late frames. |
+| The final video is missing audio or does not export | Check that the numbered PNG frames were saved and that the video-combining command can access the audio clip. |
+
+*Table 3. Practical checks for reproducing the workflow.*
+
 <style is:global>{`
   .book-content:has(.inner-landscapes-page-marker) {
     min-width: 0;
@@ -489,5 +907,54 @@ Figure 9 shows this time-based behavior. The reference image gives the visual wo
     overflow-x: auto;
     overflow-y: hidden;
     padding-bottom: 0.2rem;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) table {
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) th,
+  .book-content:has(.inner-landscapes-page-marker) td {
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) th {
+    border-bottom: 2px solid var(--border-2);
+    font-weight: 600;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-results-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-results-grid img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    margin-bottom: 0.35rem;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-results-grid figcaption {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  @media (max-width: 600px) {
+    .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-results-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 `}</style>
