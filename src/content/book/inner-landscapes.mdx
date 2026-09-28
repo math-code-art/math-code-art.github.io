@@ -7,6 +7,8 @@ sourceExhibition: "inner-landscapes"
 groundsIn: ["coordinate-networks-cppn", "random-walk-painting"]
 ---
 
+<span class="inner-landscapes-page-marker" aria-hidden="true"></span>
+
 ## Abstract
 
 This chapter introduces *Inner Landscapes*, a system for turning music and a still reference image into a moving digital painting. The system first turns the music into numerical features. It then uses those features to train a neural network to predict image colors at different image locations and visual scales. Finally, random walkers move across a canvas and leave strokes whose colors come from the trained neural network. As the music changes, the painting changes in scale, movement, stroke style, and color, creating a connection between sound, image, and emotion.
@@ -43,3 +45,449 @@ However, predicting colors is not the same as making a painting. A painting also
 > **Key Distinction:** The neural network does not draw the path. It predicts a color from an image location and current music features. The random walk creates the path of marks across the canvas. Together, they turn color prediction into a moving painting.
 
 The challenge is that a computer cannot begin with a feeling such as calm or nostalgia. It needs a clear sequence of numerical steps. We must turn music into numbers, connect those numbers to image locations, train a neural network, and then use random walks to draw the final frames. The next section gives the complete map of this system.
+
+## Methodology
+
+### Overall Methodology
+
+The question we need to answer is: how do we turn a still reference image and a changing piece of music into a painting that changes over time? At the conceptual level, the workflow is:
+
+**reference image + music -> music representation and zoom targets -> train neural network -> random-walk painting -> saved frames -> final video.**
+
+The first part of the pipeline happens during training. The program loads a reference image and an audio file for one emotion. It converts the audio into music features and also uses the music to choose one of three zoomed versions of the reference image. These zoomed versions are called *zoom targets*. They represent three visual scales of the same image.
+
+The neural network is trained from these examples. During each training step, the program chooses one sampled music frame. The music features from that frame are paired with every image location $(x,y)$ on a $512 \times 512$ training grid. The neural network predicts a color for each location. The predicted colors are compared with the colors in the selected zoom target. By repeating this process, the neural network learns a rule that connects image location, music features, and predicted color.
+
+When training is finished, the program saves a checkpoint. A checkpoint is not a separate artistic stage. It is an implementation bridge between training and rendering: a file that stores what the neural network learned, along with important settings such as the spectrogram normalization values, image size, music frame rate, zoom levels, and zoom crop sizes. The notebook later loads this checkpoint instead of training the model again.
+
+The second part of the pipeline happens during rendering. The notebook chooses an audio segment, rebuilds the music features for that segment, loads the trained neural network from the checkpoint, and creates a random-walk painter. The painter starts with a blank canvas. At each frame, each walker takes many small steps. At each walker location, the neural network uses the current image location and current music features to predict the stroke color. The music also affects the walker movement and stroke appearance. Image-region information derived from the reference image lets different parts of the canvas behave differently.
+
+The canvas is saved many times as a sequence of still images, called frames. These frames are then combined with the music to create the final video.
+
+![Overview of the Inner Landscapes workflow](/book/inner-landscapes/inner_landscapes_overall_workflow.png)
+
+*Figure 2. Overview of the Inner Landscapes workflow. Music features and zoomed target images are used to train a neural network to predict image colors. During painting, the trained network uses current music features to predict stroke colors, while music and image-region information guide the random-walk movement and stroke style. The saved frames and music are finally combined into a video.*
+
+Figure 2 gives us a simple map of the process. We can now begin with the first stage: what does music look like to a computer, and how can it be used to control visual scale?
+
+### Music Representation and Zoom
+
+#### From Sound to a Mel Spectrogram
+
+Before the computer can use music, the sound must first be stored as numbers. A digital audio file does this by recording many measurements over time. Each measurement is called a *sample*. The sample rate tells us how many samples are stored in one second. In the main emotion audio files for this project, the sample rate is $22{,}050$ samples per second.
+
+The samples describe the shape of the sound wave, but the project needs more than the wave shape. It also needs to know which frequencies are present. Frequency describes how quickly a vibration repeats. Low frequencies usually sound deeper. High frequencies usually sound higher. Music contains many frequencies at the same time, and these frequencies change as the music plays.
+
+To see these changes, we do not analyze the entire song at once. Instead, we examine many short sections of the audio called *windows*. For each window, frequency analysis measures how strongly different frequencies are present. Then the window moves forward and the process repeats. This gives the computer a new description of the music many times per second.
+
+Placing the results from all of these windows next to one another creates a *spectrogram*. The horizontal direction represents time, the vertical direction represents frequency, and the value at each location shows how strongly that frequency is present at that moment. In this way, a spectrogram lets us see both *when* something happens and *which frequencies* are present.
+
+Our program uses a target rate of $30$ music frames per second. This matches the video frame rate used later. If the audio has a sample rate of $s_r$ samples per second, the distance between two neighboring music frames is
+
+$$
+h=\left\lfloor\frac{s_r}{30}\right\rfloor,
+$$
+
+where $h$ is called the *hop length*. The floor brackets mean that the program keeps the whole-number part of the result because it must move by a whole number of samples.
+
+For the main emotion audio files,
+
+$$
+s_r=22{,}050,
+$$
+
+so
+
+$$
+h=\frac{22{,}050}{30}=735.
+$$
+
+Neighboring music frames are therefore spaced $735$ samples apart. The program analyzes a window that is twice this length, or $1470$ samples. Because the window is wider than the distance between neighboring frames, neighboring windows overlap.
+
+![Overlapping sound windows and hop length](/book/inner-landscapes/inner_landscapes_sound_window_hop.png)
+
+*Figure 3. A sound wave is stored as samples. The program analyzes overlapping windows of samples. Each new window begins one hop length after the previous one, and each window becomes one music frame for the Mel spectrogram.*
+
+Figure 3 shows why the hop length matters. The program is not listening to one isolated instant. It is looking at a short window of sound, then sliding that window forward. This gives the system a steady stream of music frames that can be aligned with video frames.
+
+A regular spectrogram organizes the result using frequency. Our system uses a *Mel spectrogram*. A Mel spectrogram groups frequencies into bands called *Mel bins*. These bands are arranged on a scale that roughly follows how people perceive differences between lower and higher sounds. The result is still organized by time and frequency, but each time frame is now represented by a list of Mel values.
+
+The project uses two Mel spectrogram settings. For the neural network, each music frame has $64$ Mel values. This means one frame of music becomes a vector with shape $[64]$. Across the whole audio file, the spectrogram has shape $[T,64]$, where $T$ is the number of music frames. For zoom decisions, the program also computes a second Mel spectrogram with $96$ Mel bins. That second representation is used later to decide which zoom target should be selected.
+
+> **Useful Rule:** The $64$-bin Mel spectrogram provides music features for predicted color. The $96$-bin Mel spectrogram helps choose visual scale. They both come from the same sound, but they serve different jobs in the system.
+
+![Mel spectrogram examples from the Joy, Calm, and Anxiety pieces](/book/inner-landscapes/inner_landscapes_mel_spectrogram_explanation.png)
+
+*Figure 4. Mel spectrogram examples from the Joy, Calm, and Anxiety pieces.*
+
+Figure 4 shows Mel spectrograms from three pieces in *Inner Landscapes*. The horizontal axis represents time, while the vertical axis represents Mel frequency bins. Brighter regions show stronger activity in those frequency bands. The different patterns in the Joy, Calm, and Anxiety examples show how different pieces of music produce different distributions of frequency activity over time.
+
+Now that we know how sound becomes a Mel spectrogram, we can look at the first job of that representation: providing music features to the neural network.
+
+#### Music Features for the Neural Network
+
+The Mel spectrogram gives us a new description of the music at many moments in time. The next question is how the neural network can use one of those moments. A single music frame tells the computer what the music is doing now. It does not tell the computer where in the image a color should be predicted. For that reason, the music features must be paired with an image location.
+
+Let $m_t$ represent the $64$-bin Mel vector at time frame $t$. After the log transform and normalization, each entry of this vector is scaled to the range from $0$ to $1$. This vector is the *current music features*. It gives a compact numerical summary of the sound at that moment.
+
+The neural network does not receive $m_t$ alone. It receives $m_t$ together with a location $(x,y)$ from the image grid. The model's question is local: given an image location and the current music features, what RGB color should appear here?
+
+During training, the image is represented on a $512 \times 512$ grid, so one full grid contains $512 \cdot 512 = 262{,}144$ image locations. For one selected music frame, the same $64$ music values are repeated for every location on this grid. Each row of the model input contains two coordinate values and $64$ music values:
+
+$$
+(x,y,m_{t,1},m_{t,2},\ldots,m_{t,64}).
+$$
+
+Therefore, one training input for one music frame has shape $[H \cdot W,66]$. The $66$ columns come from $2$ coordinate values plus $64$ music values.
+
+![A music frame paired with image locations for neural-network input](/book/inner-landscapes/inner_landscapes_model_input.png)
+
+*Figure 5. One music frame is paired with many image locations. The same current music features are repeated across the image grid, so the neural network can predict a separate RGB color at each location.*
+
+Figure 5 shows the main idea. The music frame describes the current sound. The image location tells the network where it is being asked to predict a color. The output is not a whole image all at once in the usual sense. It is a color rule applied many times, once for each location.
+
+> **Key Distinction:** The music features describe time. The image location describes space. The neural network needs both: without music, the color would not respond to the song; without location, the model would not know where in the image the color belongs.
+
+The target color for each location comes from a version of the reference image. Which version is used depends on the selected zoom target. That is the second job of the music representation.
+
+#### Music-Driven Zoom
+
+Music does more than provide color features. It also helps decide the visual scale of the target image. A calm or quiet moment may use a wider view of the reference image. A stronger moment may use a closer view. This gives the system a way to connect musical change with visual zoom.
+
+The program uses a second Mel spectrogram for this purpose. The color model uses $64$ Mel bins, but the zoom decision uses $96$ Mel bins. For each time frame, the program looks at the $75$th percentile of the normalized log-Mel values:
+
+$$
+p_t = \operatorname{percentile}_{75}(M_t),
+$$
+
+where $M_t$ is the $96$-bin Mel vector at time frame $t$ after log scaling and normalization. The value $p_t$ is not the loudness of the whole song. It is a high-energy summary of one music frame. It asks: how strong are the stronger frequency bands right now?
+
+The raw signal $p_t$ can jump too quickly from frame to frame, so the program smooths it with a moving average. It then normalizes the smoothed signal again and compares it with two emotion-specific threshold values. These thresholds divide the signal into three zoom levels:
+
+$$
+\begin{cases}
+\text{level 1,} & p_t \leq a,\\
+\text{level 2,} & a < p_t \leq b,\\
+\text{level 3,} & p_t > b.
+\end{cases}
+$$
+
+Here $a$ is the lower threshold and $b$ is the higher threshold. In the source code, these levels are stored as $0$, $1$, and $2$, but in the explanation we call them level $1$, level $2$, and level $3$ because that is easier to read.
+
+The threshold values are not the same for every emotion. The program chooses them from percentiles of that emotion's own $p_t$ signal. This matters because a quiet piece and an intense piece can have very different numerical ranges. Percentile thresholds let each piece use the three zoom levels in a way that fits its own music.
+
+The program also uses two stabilizing ideas. First, a zoom level must last for a minimum amount of time before it can change again. Second, a small hysteresis margin prevents the level from flickering when the signal sits close to a threshold. Hysteresis means that the signal must move a little past the threshold before the level changes back. These choices make the visual scale change more smoothly.
+
+![Music-driven zoom levels and target images](/book/inner-landscapes/inner_landscapes_zoom_targets.png)
+
+*Figure 6. A smoothed music-energy signal is divided by low and high thresholds into three visual scale levels. Smaller crop sizes create stronger zoom targets. The Joy example uses crop sizes $512$, $406$, and $300$.*
+
+Figure 6 shows the result for the Joy reference image. Level $1$ uses the widest view. Level $2$ crops the image more tightly and resizes it back to the training size. Level $3$ uses the smallest crop, so it looks closest. The neural network then learns colors from the zoom target selected for the sampled music frame.
+
+The crop sizes are not the same for every emotion. Each piece has its own visual scale settings:
+
+<div style="overflow-x: auto; margin-bottom: 1rem;">
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th style="padding: 0.65rem 0.75rem; border-bottom: 2px solid var(--border-2); text-align: left;">Emotion</th>
+        <th style="padding: 0.65rem 0.75rem; border-bottom: 2px solid var(--border-2); text-align: left;">Zoom crop sizes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border);">calm</td>
+        <td style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border);">486, 423, 360</td>
+      </tr>
+      <tr>
+        <td style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border);">nostalgia</td>
+        <td style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border);">512, 451, 390</td>
+      </tr>
+      <tr>
+        <td style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border);">grief</td>
+        <td style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border);">512, 426, 340</td>
+      </tr>
+      <tr>
+        <td style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border);">joy</td>
+        <td style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border);">512, 406, 300</td>
+      </tr>
+      <tr>
+        <td style="padding: 0.55rem 0.75rem;">anxiety</td>
+        <td style="padding: 0.55rem 0.75rem;">512, 426, 340</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+> **Useful Rule:** A smaller crop size means a stronger zoom. The image is cropped around the center and then resized back to the training grid, so the neural network always predicts colors on the same $512 \times 512$ coordinate system.
+
+The training program samples music frames from the available zoom levels, so the model sees examples from each visual scale. This prepares the neural network to connect current music features, image location, and selected zoom target. The next section explains what kind of neural network can learn that connection.
+
+### Neural Image Representation
+
+The reference image begins as pixels, but the trained system does not simply copy those pixels into the final video. Instead, it learns a coordinate-based image rule. The rule takes an image location and current music features as input, then returns a predicted RGB color.
+
+#### What the Neural Network Learns
+
+A neural network is a function with many adjustable numbers inside it. These adjustable numbers are called *weights* and *biases*. At the start of training, they do not yet describe the reference image well. Training changes them until the network gives better color predictions.
+
+In this project, the network is not asked to classify an image or name an emotion. Its job is more direct. For a location $(x,y)$ and current music features $m_t$, it predicts an RGB color:
+
+$$
+\hat{c}_{\theta}(x,y,m_t)=(R,G,B).
+$$
+
+The symbol $\hat{c}_{\theta}$ means "the color predicted by the network." The hat reminds us that this color is a prediction. The symbol $\theta$ stands for all the learned weights and biases inside the network. The output has three numbers because an RGB color has a red value, a green value, and a blue value. The final layer uses a sigmoid function, so these three numbers stay between $0$ and $1$.
+
+This is useful because a rule can be queried at any location. During training, the locations come from the $512 \times 512$ grid. During rendering, the random walkers visit locations on a larger $1080 \times 1080$ canvas, and those locations are normalized before being sent to the same learned rule.
+
+![The neural network as a learned color rule](/book/inner-landscapes/inner_landscapes_neural_color_rule.png)
+
+*Figure 7. The neural network learns a color rule. It receives an image location and current music features, passes them through learned layers, and outputs a predicted RGB color.*
+
+Figure 7 shows the network as a chain of transformations. The input gives the network a question. The hidden layers transform that question into intermediate values. The output gives the predicted color.
+
+#### Neurons, Layers, and Activations
+
+The basic unit of a neural network is a *neuron*. A neuron takes several input numbers, multiplies each one by a weight, adds a bias, and produces a new number. In a simple case, this looks like
+
+$$
+z=w_1x_1+w_2x_2+\cdots+w_nx_n+b.
+$$
+
+Here $x_1,x_2,\ldots,x_n$ are input values, $w_1,w_2,\ldots,w_n$ are weights, and $b$ is the bias. If a weight is large, that input has a stronger effect on the neuron. If a weight is close to zero, that input has little effect.
+
+After computing $z$, the network applies an *activation function*. An activation function bends the number before sending it to the next layer. The hidden layers in this project use the hyperbolic tangent function, written as $\tanh(z)$. Without activation functions, stacking many layers would still behave like one large linear calculation. With activation functions, the network can learn curved and detailed relationships, such as how color changes across waves, clouds, sky, or water.
+
+A *layer* is a group of neurons working side by side. This project uses several hidden layers, each with $256$ neurons. The first layer receives the encoded image location and the music features. Later layers combine these values into more useful internal patterns. The final layer produces the three RGB numbers.
+
+> **Concept in Focus:** A neural network is not magic memory. It is a large adjustable formula. Training changes the weights and biases so that the formula maps *image location* and *current music features* to a useful *predicted color*.
+
+#### The Forward Pass
+
+The calculation that goes from input to output is called the *forward pass*. First, the program builds one input vector $u$ from the encoded location and the current music features. Then each layer transforms the vector it receives:
+
+$$
+h_1=\tanh(W_1u+b_1),
+$$
+
+$$
+h_2=\tanh(W_2h_1+b_2),
+$$
+
+and the same pattern continues through the hidden layers. Here $W_1$ and $W_2$ are matrices of weights, and $b_1$ and $b_2$ are bias vectors. A matrix is just a rectangular table of numbers. Multiplying by the matrix lets one layer combine many input values at once.
+
+After the hidden layers, the final layer produces three output values:
+
+$$
+\hat{c}_{\theta}=\sigma(W_{\text{out}}h+b_{\text{out}}).
+$$
+
+The symbol $\sigma$ is the sigmoid function. It squeezes each output value into the range from $0$ to $1$, which matches the normalized RGB color range used during training. This is why the network can be trained with image colors as targets.
+
+#### Fourier Features for Image Location
+
+The first part of the input is the location $(x,y)$. The program normalizes each coordinate so that the image ranges from $-1$ to $1$ in both directions. A normalized coordinate system makes the model less dependent on the raw pixel size of the canvas. The left side of the image is near $x=-1$, the right side is near $x=1$, and the top and bottom are represented in the same way along the $y$ direction.
+
+The coordinate is then expanded with sine and cosine features. This is called a Fourier-style coordinate encoding. The purpose is to give the network several ways to sense position: broad, slow changes and smaller, faster changes. The standard implementation uses the frequencies
+
+$$
+1,\ 2,\ 4,\ 8,\ 16.
+$$
+
+The Nostalgia model uses one additional frequency, $32$, but the idea is the same. The extra frequency gives that model one more fine-scale coordinate pattern.
+
+These encoded coordinates help the network represent image detail more easily than raw $(x,y)$ alone. Raw coordinates change smoothly from left to right and top to bottom. That smoothness is useful, but it can make fine visual structure harder to learn. Sine and cosine features add repeating patterns at several scales, giving the network more ways to describe edges, waves, and small changes in the image.
+
+For each frequency, the program adds sine and cosine versions of both coordinates. In the standard setting, the two raw coordinate values therefore become
+
+$$
+2+4\cdot5=22
+$$
+
+coordinate features. With the extra Nostalgia frequency, the coordinate part becomes $2+4\cdot6=26$ features. In both cases, these coordinate features are then combined with the $64$ music features inside the network.
+
+#### L1 and L2 Color Loss
+
+Training needs a way to tell whether the predicted color is good. For a sampled music frame $t$, the program already knows the selected zoom target. At each location, the model predicts a color, and the program compares that prediction with the color from the selected zoom target:
+
+$$
+\hat{c}_{\theta}(x,y,m_t) \quad \text{compared with} \quad c_{\text{target}}(x,y).
+$$
+
+The loss is one number that summarizes how wrong the prediction is. The program combines two common kinds of color error: *L1 loss* and *L2 loss*.
+
+L1 loss measures absolute difference:
+
+$$
+L_1=|\hat{c}_{\theta}-c_{\text{target}}|.
+$$
+
+This means it looks directly at the size of the color mistake. If the prediction is off by $0.1$, the L1 error is $0.1$. If it is off by $0.4$, the L1 error is $0.4$. L1 loss is useful because it is not dominated too strongly by a few very large mistakes. In image problems, this can help preserve sharper structure.
+
+L2 loss measures squared difference:
+
+$$
+L_2=(\hat{c}_{\theta}-c_{\text{target}})^2.
+$$
+
+Squaring makes larger mistakes count more. An error of $0.4$ becomes $0.16$, while an error of $0.1$ becomes $0.01$. This encourages the model to reduce large color errors and often gives smoother training behavior.
+
+*Inner Landscapes* uses both:
+
+$$
+\text{error}
+=0.5\,|\hat{c}_{\theta}-c_{\text{target}}|
++0.5\,(\hat{c}_{\theta}-c_{\text{target}})^2.
+$$
+
+The two terms have equal weight. The L1 part keeps the model from caring only about large errors, while the L2 part still pushes the network to correct large mistakes. Together, they give a balanced color-learning signal.
+
+#### Edge-Weighted Training
+
+The program also gives different image locations different weights. The weight map is built from edge strength in the reference image, with a base weight so that non-edge pixels still matter. This helps the model pay more attention to visually important structure without completely ignoring smoother regions.
+
+This matters because not every pixel has the same visual importance. A small color error along the outline of a wave may be more noticeable than the same size error in a smooth region of sky. Edge-weighted training tells the model, in effect, to spend extra attention on locations where the reference image has stronger structure.
+
+If $w(x,y)$ is the image weight at one location, the local training loss can be understood as
+
+$$
+w(x,y)\left(0.5L_1+0.5L_2\right).
+$$
+
+The full loss is the average of this weighted error over sampled locations, color channels, and training examples.
+
+#### Backpropagation and the Checkpoint
+
+Once the loss is computed, the network must know how to change its weights. This is where derivatives enter. A derivative tells us how much one number changes when another number changes. If a small increase in one weight makes the loss larger, training should push that weight downward. If a small increase makes the loss smaller, training may push that weight upward.
+
+Backpropagation is the method that computes these directions for all the weights. It starts from the output error and moves backward through the network. For a simple chain, the idea is the chain rule:
+
+$$
+\frac{\partial L}{\partial w}
+=
+\frac{\partial L}{\partial \hat{c}}
+\cdot
+\frac{\partial \hat{c}}{\partial z}
+\cdot
+\frac{\partial z}{\partial w}.
+$$
+
+This equation says that a weight affects the loss through the later values it helps create. The real network has many layers and many weights, but the principle is the same. PyTorch performs this derivative calculation automatically. Then the Adam optimizer updates the weights in small steps. The learning rate in the training script is $0.0005$, so the updates are careful rather than sudden.
+
+> **Concept in Focus:** The checkpoint does not store the finished painting. It stores the trained color rule, normalization values, image size, music frame rate, Fourier frequencies, zoom levels, and zoom target information needed to rebuild the system later.
+
+This section gives the central neural representation: an image is treated as a learned function from location and music to color. The next section explains how that color function becomes visible as strokes on a canvas.
+
+### Audio-Driven Random Walk Painting
+
+#### From Color Rule to Moving Strokes
+
+The neural network can predict colors, but it does not decide where to draw. The moving painting needs a path. In *Inner Landscapes*, that path is created by random walkers.
+
+A random walker has a current position and a current direction. We can write its state at step $k$ as
+
+$$
+(x_k,y_k,\theta_k),
+$$
+
+where $(x_k,y_k)$ is the walker's position and $\theta_k$ is the direction angle. At each small step, the direction changes by a random amount. In the code, this random turn is sampled from a normal distribution:
+
+$$
+\epsilon_k \sim \mathcal{N}(0,\sigma_{\text{turn}}^2),
+$$
+
+so the new direction is approximately
+
+$$
+\theta_{k+1}=\theta_k+\epsilon_k.
+$$
+
+The walker then moves forward using basic trigonometry:
+
+$$
+x_{k+1}=x_k+s\cos(\theta_{k+1}),
+$$
+
+$$
+y_{k+1}=y_k+s\sin(\theta_{k+1}),
+$$
+
+where $s$ is the step length. This is the essential mathematics of the random walk used here: turn a little, move forward, repeat. If the next position reaches the boundary of the canvas, the direction is reflected back into the image. This keeps the walker inside the painting area. The walkers do not begin from one single point. They are initialized across a grid of canvas cells, so the painting can start building in many regions.
+
+The notebook does not train the model again. It loads the checkpoint, rebuilds the neural network, restores the saved weights, cuts the chosen audio segment, and recomputes the music features for that segment using the same normalization values saved during training. Then it creates an `RW_Painter`.
+
+At frame $f$, the painter takes the current music features $m_f$. The model uses these features for color prediction. The painter also computes a simple music intensity value:
+
+$$
+I_f = \max(m_f).
+$$
+
+This intensity value controls how active the walkers become. A stronger frame produces longer steps, thicker strokes, larger turning variation, and higher opacity. In simplified form, the base controls are
+
+$$
+\begin{aligned}
+\text{step length} &\approx 0.3 + 20I_f,\\
+\text{stroke width} &\approx 1 + 6I_f,\\
+\text{turn variation} &\approx 0.02 + 2I_f,\\
+\text{opacity} &\approx 5 + 50I_f.
+\end{aligned}
+$$
+
+Emotion-specific parameters then scale these quantities. For example, a piece can use more walkers, larger step scale, stronger turning scale, or a different color tint. These choices affect the visual style of the piece without changing the basic rule: music features and image location still determine the predicted color.
+
+> **Key Distinction:** Music features have two jobs during rendering. The full current music vector is used by the neural network to predict color. The single intensity value from that vector is used by the painter to control motion and stroke appearance.
+
+#### Image-Region Information and Local Style
+
+The painter also uses image-region information from the reference image. This information does not replace the neural network. It affects how the walkers move and how strongly they draw in different parts of the canvas.
+
+The program first converts the reference image to grayscale and measures edge strength with image gradients. Then it selects lower-edge regions, blurs that selection, and turns the result into a region weight between $0$ and $1$. During rendering, the active region map is matched to the current zoom level, so the region guidance follows the same visual scale as the selected zoom target.
+
+![Image-region information guiding local random-walk behavior](/book/inner-landscapes/inner_landscapes_region_guidance.png)
+
+*Figure 8. Image-region information guides local random-walk behavior. The reference image is converted into edge strength and then into a region weight map. Blue high-weight regions favor emotion-style controls, while pale low-weight regions favor detail-style controls.*
+
+Figure 8 shows why the region map is useful. Some locations use more emotion-style behavior, which can mean stronger movement, opacity, width, or drawing density. Other locations use more detail-style behavior, which is usually softer and more controlled. The final stroke parameters are blended from these two behaviors at the walker's current location.
+
+The blend is a simple weighted average. If $r(x,y)$ is the region weight at the current walker location, then a local control value can be written as
+
+$$
+q_{\text{local}}=r(x,y)q_{\text{emotion}}+\left(1-r(x,y)\right)q_{\text{detail}}.
+$$
+
+Here $q$ can stand for step length, turn variation, opacity, stroke width, or the number of drawing steps used in one frame. When $r(x,y)$ is close to $1$, the emotion-style control dominates. When it is close to $0$, the detail-style control dominates. Values between $0$ and $1$ smoothly mix the two.
+
+Each walker step follows the same basic sequence:
+
+**choose local drawing controls -> turn -> move -> predict color -> draw a stroke.**
+
+The canvas is not cleared between frames. Each new stroke is added on top of the previous strokes. This is why the result feels like a painting being built over time rather than a set of unrelated images.
+
+![Two moments from a Joy rendering responding to music](/book/inner-landscapes/inner_landscapes_music_response.png)
+
+*Figure 9. Two moments from a Joy rendering. The current music features come from different time positions in the spectrogram, and the accumulated random-walk painting looks different at those moments.*
+
+Figure 9 shows this time-based behavior. The reference image gives the visual world, the spectrogram gives changing music features, and the random walkers turn those features into accumulated marks. After the painter saves all frames, the frames are combined with the audio to create the final video.
+
+<style is:global>{`
+  .book-content:has(.inner-landscapes-page-marker) {
+    min-width: 0;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) h4 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.2rem;
+  }
+`}</style>
