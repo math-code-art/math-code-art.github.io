@@ -1,0 +1,434 @@
+---
+// SAM-mosaic demo — PHASE 1 (plumbing).
+// Same aesthetic + engine as VoronoiMosaicDemo, but the adaptive-sampling mosaic
+// is restricted to an object MASK: density x mask -> sample only inside -> nearest-seed
+// mosaic clipped to the mask, composited over the original photo (the chapter's
+// masked-mosaic pipeline).
+//
+// The mask here is a PLACEHOLDER (a disc around the clicked point) so we can verify
+// the whole interaction + pipeline before wiring the model. PHASE 2 replaces the
+// placeholder with the real SlimSAM model (src/components/workers/sam.worker.js),
+// which will emit the same kind of mask this pipeline already consumes.
+const presets = [
+  { src: '/book/voronoi-mosaic/sam_sample0.jpg', name: 'sample 1' },
+  { src: '/book/voronoi-mosaic/sam_sample1.jpg', name: 'sample 2' },
+  { src: '/book/voronoi-mosaic/sam_sample2.jpg', name: 'sample 3' },
+];
+---
+<div class="vdemo">
+  <div class="vdemo__stage">
+    <div class="sam__presetcol">
+      <p class="sam__presetlabel">Samples</p>
+      <div class="sam__presets" role="group" aria-label="Sample images">
+        {presets.map((p) => (
+          <button type="button" class="sam__preset" data-src={p.src} data-name={p.name} title={p.name}>
+            <img src={p.src} alt={p.name} loading="lazy" />
+          </button>
+        ))}
+      </div>
+    </div>
+    <figure class="vdemo__hero">
+      <canvas id="sam-mos" width="512" height="512" aria-label="Segmented Voronoi mosaic — click to place the segmentation prompt"></canvas>
+      <figcaption>Click the image to segment</figcaption>
+    </figure>
+  </div>
+
+  <div class="vdemo__controls">
+    <div class="vdemo__source">
+      <label class="vdemo__file">
+        Upload Custom Image
+        <input type="file" id="sam-file" accept="image/*" />
+      </label>
+      <button type="button" class="vdemo__download" id="sam-download">Download mosaic</button>
+      <output id="sam-filename">sample 1</output>
+    </div>
+    <p class="vdemo__priv">
+      Placeholder segmentation for now &mdash; Phase 2 swaps in the real SlimSAM model.
+      Images stay in your browser; nothing is uploaded.
+    </p>
+
+    <div class="vdemo__sliders">
+      <label class="vdemo__row">
+        <span>Brightness weight <code>w_b</code></span>
+        <input type="range" id="sam-wb" min="0" max="1" step="0.05" value="0.6" />
+        <output id="sam-wbv">0.60</output>
+      </label>
+      <label class="vdemo__row">
+        <span>Edge weight <code>w_e</code></span>
+        <input type="range" id="sam-we" min="0" max="1" step="0.05" value="0.4" />
+        <output id="sam-wev">0.40</output>
+      </label>
+      <label class="vdemo__row">
+        <span>Points <code>N</code></span>
+        <input type="range" id="sam-n" min="100" max="1200" step="50" value="500" />
+        <output id="sam-nv">500</output>
+      </label>
+    </div>
+
+    <div class="vdemo__buttons">
+      <button type="button" id="sam-relax">Lloyd relax &times;1</button>
+      <button type="button" id="sam-resample">Resample</button>
+      <label class="vdemo__chk"><input type="checkbox" id="sam-showpts" /> Show points</label>
+    </div>
+    <p class="vdemo__hint">
+      Click anywhere on the image to move the segmentation prompt; only the region inside the mask
+      becomes a mosaic. <em>(Placeholder disc mask for now &mdash; the real model comes next.)</em>
+    </p>
+  </div>
+</div>
+
+<script>
+  const WORK_LONG = 220, MOS_LONG = 512, MIN_SHORT = 24;
+  let W = WORK_LONG, H = WORK_LONG, NPX = W * H;
+  let MW = MOS_LONG, MH = MOS_LONG;
+
+  const mosCanvas = document.getElementById('sam-mos');
+
+  if (mosCanvas) {
+    const mctx = mosCanvas.getContext('2d');
+    const src = document.createElement('canvas');
+    const sctx = src.getContext('2d', { willReadFrequently: true });
+    const layer = document.createElement('canvas');     // scratch for alpha compositing
+    const lctx = layer.getContext('2d');
+
+    let srcData, currentImg = null;
+    let lum, edge, dens, cdf, label, mask;
+    const s2l = (u) => { u /= 255; return u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4); };
+
+    // --- State ---
+    let wb = 0.6, we = 0.4, N = 500, showPts = false;
+    let promptX = W / 2, promptY = H / 2;
+    let seedX = new Float32Array(N), seedY = new Float32Array(N);
+    let seedColor = new Uint8Array(N * 3);
+    let sumX, sumY, cnt, grid = null;
+
+    function setDimensions(ar) {
+      if (ar >= 1) { W = WORK_LONG; H = Math.max(MIN_SHORT, Math.round(WORK_LONG / ar)); }
+      else { H = WORK_LONG; W = Math.max(MIN_SHORT, Math.round(WORK_LONG * ar)); }
+      NPX = W * H;
+      const scale = MOS_LONG / Math.max(W, H);
+      MW = Math.round(W * scale); MH = Math.round(H * scale);
+      lum = new Float32Array(NPX); edge = new Float32Array(NPX);
+      dens = new Float32Array(NPX); cdf = new Float32Array(NPX);
+      label = new Int32Array(NPX); mask = new Uint8Array(NPX);
+      src.width = W; src.height = H;
+      mosCanvas.width = MW; mosCanvas.height = MH;
+    }
+
+    function drawImageFit(img) {
+      sctx.fillStyle = '#ffffff'; sctx.fillRect(0, 0, W, H);
+      sctx.drawImage(img, 0, 0, W, H);
+    }
+
+    function computeStats() {
+      srcData = sctx.getImageData(0, 0, W, H).data;
+      for (let i = 0; i < NPX; i++) {
+        lum[i] = 0.2126 * s2l(srcData[i * 4]) + 0.7152 * s2l(srcData[i * 4 + 1]) + 0.0722 * s2l(srcData[i * 4 + 2]);
+      }
+      let emax = 1e-8;
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const i = y * W + x;
+          const gx = -lum[i - W - 1] - 2 * lum[i - 1] - lum[i + W - 1] + lum[i - W + 1] + 2 * lum[i + 1] + lum[i + W + 1];
+          const gy = -lum[i - W - 1] - 2 * lum[i - W] - lum[i - W + 1] + lum[i + W - 1] + 2 * lum[i + W] + lum[i + W + 1];
+          const m = Math.hypot(gx, gy);
+          edge[i] = m; if (m > emax) emax = m;
+        }
+      }
+      for (let i = 0; i < NPX; i++) edge[i] /= emax;
+    }
+
+    // PLACEHOLDER MASK: a disc around the clicked point. Phase 2 replaces this.
+    function buildMask() {
+      const r = 0.30 * Math.min(W, H), r2 = r * r;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const dx = x - promptX, dy = y - promptY;
+          mask[y * W + x] = (dx * dx + dy * dy) <= r2 ? 1 : 0;
+        }
+      }
+    }
+
+    function computeDensity() {
+      let sum = 0;
+      for (let i = 0; i < NPX; i++) {
+        let d = 0;
+        if (mask[i]) { d = wb * (1 - lum[i]) + we * edge[i]; if (d < 1e-6) d = 1e-6; }
+        dens[i] = d; sum += d;
+      }
+      if (sum <= 0) { for (let i = 0; i < NPX; i++) { dens[i] = mask[i] ? 1 : 0; sum += dens[i]; } }
+      if (sum <= 0) { for (let i = 0; i < NPX; i++) dens[i] = 1; sum = NPX; }
+      let acc = 0; const inv = 1 / sum;
+      for (let i = 0; i < NPX; i++) { acc += dens[i] * inv; cdf[i] = acc; }
+    }
+
+    function sampleSeeds() {
+      seedX = new Float32Array(N); seedY = new Float32Array(N);
+      for (let k = 0; k < N; k++) {
+        const rr = Math.random();
+        let lo = 0, hi = NPX - 1;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (cdf[mid] < rr) lo = mid + 1; else hi = mid; }
+        seedX[k] = (lo % W) + Math.random();
+        seedY[k] = ((lo / W) | 0) + Math.random();
+      }
+    }
+
+    function computeSeedColors() {
+      seedColor = new Uint8Array(N * 3);
+      for (let k = 0; k < N; k++) {
+        const sx = Math.min(W - 1, Math.max(0, seedX[k] | 0));
+        const sy = Math.min(H - 1, Math.max(0, seedY[k] | 0));
+        const si = (sy * W + sx) * 4;
+        seedColor[k * 3] = srcData[si]; seedColor[k * 3 + 1] = srcData[si + 1]; seedColor[k * 3 + 2] = srcData[si + 2];
+      }
+    }
+
+    function buildGrid() {
+      const cell = Math.max(2, Math.round(Math.sqrt((W * H) / Math.max(1, N))));
+      const gw = Math.ceil(W / cell), gh = Math.ceil(H / cell);
+      const heads = new Int32Array(gw * gh).fill(-1);
+      const next = new Int32Array(N).fill(-1);
+      for (let k = 0; k < N; k++) {
+        const gx = Math.min(gw - 1, (seedX[k] / cell) | 0);
+        const gy = Math.min(gh - 1, (seedY[k] / cell) | 0);
+        const b = gy * gw + gx; next[k] = heads[b]; heads[b] = k;
+      }
+      grid = { cell, gw, gh, heads, next };
+    }
+
+    function nearestSeed(x, y) {
+      const { cell, gw, gh, heads, next } = grid;
+      const gx = Math.min(gw - 1, (x / cell) | 0), gy = Math.min(gh - 1, (y / cell) | 0);
+      let best = -1, bestD = Infinity;
+      for (let r = 0; ; r++) {
+        const x0 = Math.max(0, gx - r), x1 = Math.min(gw - 1, gx + r);
+        const y0 = Math.max(0, gy - r), y1 = Math.min(gh - 1, gy + r);
+        for (let cyi = y0; cyi <= y1; cyi++) {
+          for (let cxi = x0; cxi <= x1; cxi++) {
+            if (Math.max(Math.abs(cxi - gx), Math.abs(cyi - gy)) !== r) continue;
+            for (let k = heads[cyi * gw + cxi]; k !== -1; k = next[k]) {
+              const dx = seedX[k] - x, dy = seedY[k] - y; const d = dx * dx + dy * dy;
+              if (d < bestD) { bestD = d; best = k; }
+            }
+          }
+        }
+        if (best !== -1 && (r * cell) * (r * cell) > bestD) break;
+        if (x0 === 0 && y0 === 0 && x1 === gw - 1 && y1 === gh - 1) break;
+      }
+      return best;
+    }
+
+    // Assign only the masked pixels; centroids are of each cell's masked part (Lloyd-in-mask).
+    function assign() {
+      buildGrid();
+      sumX = new Float64Array(N); sumY = new Float64Array(N); cnt = new Int32Array(N);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = y * W + x;
+          if (!mask[i]) continue;
+          const k = nearestSeed(x, y);
+          label[i] = k; sumX[k] += x; sumY[k] += y; cnt[k]++;
+        }
+      }
+    }
+
+    // Snap a point to the nearest in-mask pixel (spiral search).
+    function nearestInside(px, py) {
+      const x = Math.min(W - 1, Math.max(0, px | 0)), y = Math.min(H - 1, Math.max(0, py | 0));
+      if (mask[y * W + x]) return [px, py];
+      for (let r = 1; r < 90; r++) {
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+            if (mask[ny * W + nx]) return [nx + 0.5, ny + 0.5];
+          }
+        }
+      }
+      return [promptX, promptY];
+    }
+
+    function relax() {
+      for (let k = 0; k < N; k++) { if (cnt[k] > 0) { seedX[k] = sumX[k] / cnt[k]; seedY[k] = sumY[k] / cnt[k]; } }
+      for (let k = 0; k < N; k++) {
+        const inside = mask[Math.min(H - 1, seedY[k] | 0) * W + Math.min(W - 1, seedX[k] | 0)];
+        if (!inside) { const [nx, ny] = nearestInside(seedX[k], seedY[k]); seedX[k] = nx; seedY[k] = ny; }
+      }
+    }
+
+    function renderMosaic() {
+      mctx.clearRect(0, 0, MW, MH);
+      if (currentImg) mctx.drawImage(currentImg, 0, 0, MW, MH); else mctx.drawImage(src, 0, 0, MW, MH);
+      layer.width = MW; layer.height = MH;
+      const img = lctx.createImageData(MW, MH); const d = img.data;
+      const sx = W / MW, sy = H / MH;
+      for (let Y = 0; Y < MH; Y++) {
+        for (let X = 0; X < MW; X++) {
+          const wx = (X + 0.5) * sx, wy = (Y + 0.5) * sy;
+          const mi = Math.min(H - 1, wy | 0) * W + Math.min(W - 1, wx | 0);
+          if (mask[mi]) {
+            const k = nearestSeed(wx, wy); const o = (Y * MW + X) * 4, c = k * 3;
+            d[o] = seedColor[c]; d[o + 1] = seedColor[c + 1]; d[o + 2] = seedColor[c + 2]; d[o + 3] = 255;
+          }
+        }
+      }
+      lctx.putImageData(img, 0, 0);
+      mctx.drawImage(layer, 0, 0);
+      if (showPts) {
+        const scx = MW / W, scy = MH / H;
+        mctx.fillStyle = 'rgba(20,20,25,0.8)';
+        for (let k = 0; k < N; k++) { mctx.beginPath(); mctx.arc(seedX[k] * scx, seedY[k] * scy, 1.7, 0, Math.PI * 2); mctx.fill(); }
+      }
+      // Prompt marker (visible over both photo and mosaic)
+      const mkx = promptX * (MW / W), mky = promptY * (MH / H);
+      mctx.lineWidth = 3.5; mctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      mctx.beginPath(); mctx.arc(mkx, mky, 7, 0, Math.PI * 2); mctx.stroke();
+      mctx.lineWidth = 2; mctx.strokeStyle = '#ffffff';
+      mctx.beginPath(); mctx.arc(mkx, mky, 7, 0, Math.PI * 2); mctx.stroke();
+    }
+
+    function fullUpdate() {
+      buildMask(); computeDensity(); sampleSeeds(); computeSeedColors(); assign();
+      renderMosaic();
+    }
+
+    let queued = false;
+    function schedule() { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; fullUpdate(); }); }
+
+    function loadSource(img, name) {
+      currentImg = img;
+      setDimensions(img.naturalWidth / img.naturalHeight);
+      drawImageFit(img);
+      computeStats();
+      promptX = W / 2; promptY = H / 2;
+      fullUpdate();
+      const el = document.getElementById('sam-filename');
+      if (el && name) el.textContent = name;
+    }
+
+    function loadFromUrl(url, name) {
+      const img = new Image();
+      img.onload = () => loadSource(img, name);
+      img.onerror = () => { const el = document.getElementById('sam-filename'); if (el) el.textContent = 'could not load'; };
+      img.src = url;
+    }
+
+    // --- Wiring (gated so nothing runs until the SAM tab is opened) ---
+    let started = false;
+    function start() {
+      if (started) return; started = true;
+
+      document.querySelectorAll('.sam__preset').forEach((b) => {
+        b.addEventListener('click', () => {
+          document.querySelectorAll('.sam__preset').forEach((o) => o.classList.toggle('is-active', o === b));
+          loadFromUrl(b.dataset.src, b.dataset.name);
+        });
+      });
+
+      const fileEl = document.getElementById('sam-file');
+      const fileName = document.getElementById('sam-filename');
+      fileEl.addEventListener('change', () => {
+        const file = fileEl.files && fileEl.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { loadSource(img, file.name); URL.revokeObjectURL(url); document.querySelectorAll('.sam__preset').forEach((o) => o.classList.remove('is-active')); };
+        img.onerror = () => { URL.revokeObjectURL(url); if (fileName) fileName.textContent = "couldn't read that file"; };
+        img.src = url;
+      });
+
+      const wbEl = document.getElementById('sam-wb'), weEl = document.getElementById('sam-we'), nEl = document.getElementById('sam-n');
+      const wbv = document.getElementById('sam-wbv'), wev = document.getElementById('sam-wev'), nv = document.getElementById('sam-nv');
+      wbEl.addEventListener('input', () => { wb = +wbEl.value; wbv.textContent = wb.toFixed(2); schedule(); });
+      weEl.addEventListener('input', () => { we = +weEl.value; wev.textContent = we.toFixed(2); schedule(); });
+      nEl.addEventListener('input', () => { N = +nEl.value; nv.textContent = N; schedule(); });
+
+      document.getElementById('sam-resample').addEventListener('click', () => { sampleSeeds(); computeSeedColors(); assign(); renderMosaic(); });
+      document.getElementById('sam-relax').addEventListener('click', () => { relax(); computeSeedColors(); assign(); renderMosaic(); });
+      document.getElementById('sam-showpts').addEventListener('change', (e) => { showPts = e.target.checked; renderMosaic(); });
+      document.getElementById('sam-download').addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = mosCanvas.toDataURL('image/png'); a.download = 'sam-voronoi-mosaic.png';
+        document.body.appendChild(a); a.click(); a.remove();
+      });
+
+      // Click anywhere on the image to move the segmentation prompt.
+      mosCanvas.addEventListener('click', (e) => {
+        const rect = mosCanvas.getBoundingClientRect();
+        promptX = Math.min(W - 1, Math.max(0, (e.clientX - rect.left) / rect.width * W));
+        promptY = Math.min(H - 1, Math.max(0, (e.clientY - rect.top) / rect.height * H));
+        fullUpdate();
+      });
+
+      // Load the first preset.
+      const first = document.querySelector('.sam__preset');
+      if (first) { first.classList.add('is-active'); loadFromUrl(first.dataset.src, first.dataset.name); }
+    }
+
+    // Lazy: start when the SAM tab is first opened (or immediately if already visible).
+    window.addEventListener('sam:activate', start, { once: true });
+    if (mosCanvas.offsetParent !== null) start();
+  }
+</script>
+
+<style>
+  .vdemo {
+    display: flex; flex-direction: column; gap: 1.1rem;
+    max-width: 548px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); padding: 1.1rem 1.2rem; margin: 1.25rem 0 1.5rem;
+  }
+  .vdemo__stage { display: flex; gap: 1rem; align-items: flex-start; }
+  .sam__presetcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .sam__presetlabel { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .vdemo__hero { flex: 2.5 1 0; min-width: 0; margin: 0; }
+  .vdemo figure { margin: 0; }
+  .vdemo canvas { width: 100%; height: auto; display: block; border: 1px solid var(--border-2); border-radius: 4px; background: #fff; }
+  #sam-mos { cursor: crosshair; }
+  .vdemo figcaption { font-family: var(--font-mono); font-size: 0.66rem; color: var(--muted); text-align: center; margin-top: 0.4rem; }
+
+  .vdemo__controls { display: flex; flex-direction: column; gap: 0.8rem; }
+
+  .vdemo__source { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .sam__presets { display: flex; flex-direction: column; gap: 0.5rem; }
+  .sam__preset { padding: 0; border: 1px solid var(--border-2); border-radius: 5px; background: none; cursor: pointer; width: 100%; aspect-ratio: 3 / 2; overflow: hidden; transition: border-color 0.15s; }
+  .sam__preset img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .sam__preset:hover { border-color: var(--accent); }
+  .sam__preset.is-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+  .vdemo__file, .vdemo__download {
+    font-family: var(--font-mono); font-size: 0.74rem; cursor: pointer;
+    color: var(--bg); background: var(--accent);
+    border: 1px solid var(--accent); border-radius: 5px; padding: 0.42rem 0.75rem; transition: opacity 0.15s;
+  }
+  .vdemo__file:hover, .vdemo__download:hover { opacity: 0.88; }
+  .vdemo__file input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  #sam-filename { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+  .vdemo__priv { font-size: 0.68rem; color: var(--muted); margin: -0.3rem 0 0; }
+
+  .vdemo__sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem 1.4rem; }
+  .vdemo__row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.35rem 0.6rem; font-size: 0.8rem; color: var(--text); }
+  .vdemo__row span { grid-column: 1 / -1; }
+  .vdemo__row code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface-2); padding: 0.05em 0.3em; border-radius: 3px; }
+  .vdemo__row input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .vdemo__row output { font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent); min-width: 2.4em; text-align: right; }
+
+  .vdemo__buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .vdemo__buttons button {
+    font-family: var(--font-mono); font-size: 0.74rem; cursor: pointer;
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border-2); border-radius: 5px; padding: 0.4rem 0.7rem; transition: border-color 0.15s, color 0.15s;
+  }
+  .vdemo__buttons button:hover { border-color: var(--accent); color: var(--accent); }
+  .vdemo__chk { display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--muted); }
+  .vdemo__chk input { accent-color: var(--accent); }
+
+  .vdemo__hint { font-size: 0.74rem; line-height: 1.6; color: var(--muted); margin: 0.1rem 0 0; }
+  .vdemo__hint code, .vdemo__hint em { font-family: var(--font-mono); font-size: 0.9em; font-style: normal; }
+
+  @media (max-width: 560px) {
+    .vdemo__stage { flex-direction: column; }
+    .vdemo__sliders { grid-template-columns: 1fr; }
+  }
+</style>

@@ -445,6 +445,61 @@ h1 { margin-bottom: 0.75rem; }
   margin-bottom: 1.25rem;
 }
 
+/* --- Figure tables (image grids) in book chapters ---
+   Authored as normal Markdown tables. Convention: an optional title header
+   row, one or more image rows, and a final caption/credit row (styled small
+   and muted via tbody tr:last-child). */
+.book-content :global(table) {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0 0 1.5rem;
+}
+.book-content :global(th),
+.book-content :global(td) {
+  border: 1px solid var(--border);
+  padding: 0.6rem;
+  text-align: center;
+  vertical-align: middle;
+  overflow-wrap: break-word;
+}
+.book-content :global(th) {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--surface-2);
+}
+/* Final row of the body reads as the caption/credit line. */
+.book-content :global(tbody tr:last-child td) {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+/* Images inside cells fill the column with no extra frame gap. */
+.book-content :global(td img),
+.book-content :global(th img) {
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* --- Single figures with a caption --- */
+.book-content :global(figure) {
+  margin: 0 0 1.5rem;
+  text-align: center;
+}
+.book-content :global(figure img) {
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto 0.5rem;
+}
+.book-content :global(figcaption) {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+
 .prev-next {
   display: flex;
   justify-content: space-between;

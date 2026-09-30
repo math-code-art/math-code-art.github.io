@@ -3,6 +3,7 @@ title: "Voronoi Tessellation and Adaptive Sampling"
 chapterNumber: 2
 part: education
 topicFamily: "Parametric Curves & Tessellation"
+writing: ["Winxon Nguyen"]
 sourceTutorials: ["voronoi-mosaic"]
 connections: ["vorolight"]
 ---
@@ -33,7 +34,9 @@ A portrait holds its story in the eyes, the corner of a smile, or the tiny lines
 be summarized in a single stroke and nobody would object. Humans categorize their attention this way instinctively. In this chapter, we're going to teach a computer 
 to do the same thing, using the technique of Voronoi Diagrams.
 
-Image Here
+| ![Two-dimensional Voronoi diagram](/book/voronoi-mosaic/voronoi_2D.png) | ![Three-dimensional Voronoi diagram](/book/voronoi-mosaic/voronoi_3D.png) |
+| :---: | :---: |
+| *Credit placeholder* | *Credit placeholder* |
 
 The oldest record of the idea comes from René Descartes, sketching out the starry skies by partitioning the space by proximity to the nearest star, in order to map 
 the range of influence of the celestial bodies. Fast forward to 1854, during the cholera outbreak in London, English physician John Snow mapped every home to the 
@@ -46,7 +49,10 @@ like a generating point, pushing outward until it collides with its neighbors, w
 like a Voronoi diagram. And in architecture, the pattern has been used deliberately, the ceiling and façade of Beijing's National Aquatics Center for the 2008 
 Olympics, were designed around a Voronoi lattice meant to echo the irregular geometry of soap bubbles. The same math has been used endlessly since centuries ago. 
 
-Table Here
+| Title placeholder | Title placeholder | Title placeholder |
+| :---: | :---: | :---: |
+| *[image placeholder]* | *[image placeholder]* | *[image placeholder]* |
+| *Name — description — citation* | *Name — description — citation* | *Name — description — citation* |
 
 The name itself didn't arrive until 1908, when the mathematician Georgy Voronoi formally generalized the construction to arbitrary dimensions while working on the 
 geometry of quadratic forms, and formalized the definition of Voronoi diagrams as “a partition of space into regions where each region contains all points closest 
@@ -61,8 +67,6 @@ $$ V_i = \left\{x \in X \mid d(x, p_i) \le d(x, p_j)\ \forall j \ne i \right\}. 
 
 The diagram is simply the collection of $V_i$ for all $n$.
 
-Table Here
-
 From this historical method of describing star fields and disease prevention, we are going to use it to describe pixels, turning an image into a field of 
 “significance” that lets us decide where we scatter the points in order to create a Voronoi mosaic.
 
@@ -74,7 +78,10 @@ The question we want to answer in this section is “What is important in the im
 2 factors. We look at the brightness, as well as its relationship to surrounding pixels, called the edges. These are defined by the *brightness gradient*, in other 
 words, how fast the pixel brightness changes as you shift across the image. This allows the detection of an image. In digital image processing, it is called a *Sobel filter*.
 
-Table Here
+| Original image | 1 − Brightness | Edge magnitude |
+| :---: | :---: | :---: |
+| ![Original dog photograph](/book/voronoi-mosaic/dog_image.png) | ![The 1 − brightness (darkness) field](/book/voronoi-mosaic/dog_brightness.png) | ![Sobel edge-magnitude field](/book/voronoi-mosaic/dog_edge_mag.png) |
+| *Figure 1 — the source image* | *Figure 2 — the 1 − brightness field* | *Figure 3 — the edge field* |
 
 Figure 2 shows what happens when we look at $1-brightness$ of the image. We subtract from one because rather than brightness, we are looking for the dark terms. This is 
 because in art, brighter areas are often flattened and lose detail since light erodes nearby detail due to the effect of *luminance contrast degradation*. In other words, 
@@ -111,6 +118,11 @@ R_{\mathrm{lin}} =
 \left(\frac{R + 0.055}{1.055}\right)^{2.4},
 \quad R > 0.04045.
 $$
+
+<figure>
+  <img src="/book/voronoi-mosaic/srgb_gamma.svg" alt="The sRGB-to-linear transfer curve sitting below the diagonal y = x line" />
+  <figcaption>The sRGB → linear (gamma) correction. Because the curve sits below the dashed <em>y = x</em> line, a stored value maps to less physical light than its number suggests — which is exactly why we undo the curve before weighting the channels.</figcaption>
+</figure>
 
 This is the same for green and blue as well. However, we must make sure to normalize our result in the range [0, 1] to work with the linearization process. Thus we now obtain 
 a true brightness formula to compute genuine luminance rather than an approximation. 
@@ -159,6 +171,8 @@ $$
 edge = |\nabla B(x, y)| = \sqrt{{G_x(x, y)}^2 + {G_y(x, y)}^2}
 $$
 
+**Image here —** A small schematic of the 3×3 Gx and Gy kernels sliding across a patch of pixels to produce a gradient response. It bridges the abstract kernel matrices above and the edge image in the Methodology table, showing what "convolving to find edges" actually does.
+
 </Collapsible>
 
 <Collapsible title="Centroidal Voronoi Diagrams & Lloyd Relaxation">
@@ -200,7 +214,10 @@ $D$ simply represents how far a typical point sits from its nearest representati
 for the whole density field. What Lloyd's loop does is coordinate descent on $D$, by holding the partition fixed and moving each $p_i$ to its cell's centroid can only decrease $D$ or leave 
 it unchanged.
 
-Table Here
+| Randomly Scattered Points | 1 Iteration | 10 Iterations | 20 Iterations |
+| :---: | :---: | :---: | :---: |
+| ![Randomly scattered points](/book/voronoi-mosaic/lloyd_0.png) | ![Points after one Lloyd iteration](/book/voronoi-mosaic/lloyd_1.png) | ![Points after ten Lloyd iterations](/book/voronoi-mosaic/lloyd_10.png) | ![Points after twenty Lloyd iterations](/book/voronoi-mosaic/lloyd_20.png) |
+| *This is the base, a field of randomly scattered points that take up a large range of space.* | *Upon 1 iteration, the original (red) points move to their new location (blue) which is more central to each cell.* | *After 10 iterations, the cells become much more uniform as the points reside in their centers.* | *However after 10 more iterations, not much changes, as we get closer and closer to absolute uniformity.* |
 
 </Collapsible>
 
@@ -215,7 +232,10 @@ $$
 We can create a heat map where we should focus the most amount of points and attention for our Voronoi art as shown in Figure 4. The next step is simply to translate what we have done into 
 Python! Using the Python libraries included in Appendix 1 will allow us to simplify much of the manual mathematics we will have to do, using pre-coded libraries already made. 
 
-Image Here
+<figure>
+  <img src="/book/voronoi-mosaic/dog_combined_density.png" alt="Combined significance density field for the dog image" />
+  <figcaption>Figure 4 — the combined significance density field, the heat map of where the mosaic should spend its detail.</figcaption>
+</figure>
 
 First, we should import our sample image from Appendix 2, and obtain its dimensions in the variables H and W. 
 
@@ -287,7 +307,10 @@ pts = sample_points_from_density(p, N_points, rng)
 ```
 The result is exactly what we planned, a dense cluster of points crowding dark areas, and sparse in the flat images, in other words, the eyes and fur, and a sparse scatter over the flat blanket. 
 
-Image Here
+<figure>
+  <img src="/book/voronoi-mosaic/dog_adaptive_samples.png" alt="Adaptive samples drawn from the density field" />
+  <figcaption>The adaptive samples — points crowd the dark, high-detail regions and thin out over the flat blanket.</figcaption>
+</figure>
 
 There's a catch, though. Because sampling is random, points in high density regions can land almost on top of each other, producing small clumps rather than an even mosaic tiling. We fix this with a couple 
 of steps of Lloyd relaxation we discussed earlier, a method to improve spacing without erasing the density pattern. It accomplishes this by iterating many Voronoi diagrams from a set of points, calculating 
@@ -348,7 +371,10 @@ for _ in range(2):
     relaxed = lloyd_box_step(relaxed, W, H)
 ```
 
-Table Here
+<figure>
+  <img src="/book/voronoi-mosaic/dog_adaptive_samples_before_after.png" alt="Point distribution before and after Lloyd relaxation" />
+  <figcaption>Before (left) and after (right) two steps of Lloyd relaxation — clumps even out without erasing the density pattern.</figcaption>
+</figure>
 
 With well spaced points sitting on top of our significance field, the last step is almost anticlimactic: each point becomes the generator of its own Voronoi cell, and we fill that cell with the color sampled 
 from the original image at the generator's location. Large, flat polygons fall over the smooth blanket; small, tightly packed polygons hug the eyes and the edge of the fur. We can then put everything together 
@@ -372,7 +398,10 @@ ax.set_xlim(0,W); ax.set_ylim(H,0); ax.axis('off')
 plt.show()
 ```
 
-Image here
+<figure>
+  <img src="/book/voronoi-mosaic/dog_final.png" alt="Finished adaptive Voronoi mosaic of the dog" />
+  <figcaption>The finished adaptive Voronoi mosaic — dense cells over the eyes and fur, large flat cells over the blanket.</figcaption>
+</figure>
 
 </Collapsible>
 
@@ -406,7 +435,15 @@ the mask decoder doesn't produce a hard 0 or 1, binary, decision for each pixel 
 that mask, the model also reports a confidence score estimating how good its own answer is, similar to, but not exactly a formal probability percentage. The score is a number telling us how much to trust this 
 particular guess. We'll rely on exactly that score in 4.5, to automatically pick between several candidate masks when a prompt is ambiguous.
 
-Image Here
+<figure>
+  <img src="/book/voronoi-mosaic/sam_pipeline.svg" alt="Block diagram of the SAM pipeline from image and prompt to mask and score" />
+  <figcaption>The Segment Anything Model pipeline: an image and a prompt flow through separate encoders into the mask decoder, which returns a mask and a confidence score. The heavy image encoder runs once; the prompt encoder and decoder are light enough to re-run for every new click.</figcaption>
+</figure>
+
+<figure>
+  <img src="/book/voronoi-mosaic/meta_sam_sample.png" alt="Example segmentation from Meta's Segment Anything Model" />
+  <figcaption>Example output from Meta's Segment Anything Model (SAM). Credit placeholder.</figcaption>
+</figure>
 
 But how does a machine produce that continuous map that scores pixels? Meta’s SAM was trained on 11 million high resolution images, breaking each into about 100 masks per image, totalling a dataset well over 
 1.1 billion masks. Drawing that many by hand would be near impossible, and so instead most of those masks weren't drawn by a human at all. With only a small initial round of human-assisted labeling, later stages 
@@ -444,7 +481,10 @@ $$
 e_i = W_e \cdot flatten(x_i)
 $$
 
-Image Here
+<figure>
+  <img src="/book/voronoi-mosaic/patch_embedding.svg" alt="A patch being flattened, projected by the weight matrix, and given a position vector to form a token" />
+  <figcaption>How a patch becomes a token: the image is cut into 16×16 patches, each patch is flattened to 768 numbers, projected by <em>Wₑ</em> into the embedding <em>eᵢ</em>, and given a position vector <em>posᵢ</em>.</figcaption>
+</figure>
 
 The function $flatten(x_i)$ simply takes an arbitrary 16×16×3 patch of pixels, $i$, and flattens it. This is simply the process of rewriting the 768 numbers out in one long row instead of a grid, a conversion of 
 information. As for the variable $W_e$. $W_e$ is a matrix, already found during the extensive training process already done by Meta. This process of training a network is an extensive process in and of itself, 
@@ -484,7 +524,10 @@ is large exactly when what patch $i$ is looking for lines up with what patch $j$
 and align poorly with a patch of asphalt road. We will also need to divide by $\sqrt{d}$ purely for numerical stability: $q_i$ and $k_j$ are each vectors of length $d$, so their dot product is a sum of $d$ individual 
 terms, and its typical size grows with $d$. By dividing by $\sqrt{d}$, we keep these similarity scores in a consistent range regardless of how large $d$ happens to be.
 
-Image Here
+<figure>
+  <img src="/book/voronoi-mosaic/attention.svg" alt="Scaled dot-product attention: a query compared with keys, softmax weights, and a weighted sum of values" />
+  <figcaption>One attention step: a patch's query is compared with every key, softmax turns the scores into weights, and the output is the weighted sum of the values — so the most relevant patches contribute most.</figcaption>
+</figure>
 
 However, these raw similarity scores aren't weights yet, they can be any real number, positive or negative, and don't sum to anything in particular. We turn them into a genuine set of weights using the *softmax* function, 
 which takes a list of scores $s_1, \ldots, s_n$ and returns:
@@ -540,7 +583,10 @@ points apart precisely. Stacking many different frequencies together, from very 
 zoom levels at once. This is the same underlying idea as $pos_i$ from section 4.3, just built more elaborately, because here it's not one of several inputs to a token, but the entire content of the token before we add 
 semantic meaning to it.
 
-Image Here
+<figure>
+  <img src="/book/voronoi-mosaic/fourier_features.svg" alt="A low-frequency and a high-frequency sine wave, showing two nearby points mapping to similar vs very different values" />
+  <figcaption>Why SAM stacks many frequencies: a low-frequency wave gives two nearby points almost the same value (coarse position), while a high-frequency wave separates them sharply (fine position). Together they encode a coordinate at every zoom level at once.</figcaption>
+</figure>
 
 But $\gamma(x, y)$ only encodes where a point sits, but it says nothing about what kind of point it is. A click meant to say "this is part of the object" and a click meant to say "this is *not* part of the object" could 
 land at the exact same coordinate and $\gamma$ alone couldn't tell them apart. The fix is the simplest kind of embedding we've seen yet. A single fixed vector, we can call it $t_{fg}$ for foreground, $t_{bg}$ for 
@@ -562,6 +608,8 @@ $$
 
 Rather than building a separate encoder for an entirely different prompt shape, SAM just teaches two more tokens, what "top-left corner" and "bottom-right corner" mean, and reuses the same pipeline.
 
+**Image here —** A simple schematic of the prompt types: a foreground click vs a background click at the same spot, and a box drawn as two labelled corners. It shows how each different prompt shape turns into a token, tying together the label vectors and the box encoding just described.
+
 </Collapsible>
 
 <Collapsible title="Mask Decoder, Ambiguity, and Multi-Mask Output">
@@ -578,6 +626,8 @@ patches. This lets a background point cancel out a nearby foreground point's inf
 from the prompt tokens but the keys and values come from the function $E$, pulling in whatever visual detail is relevant to what was clicked. Third, the image tokens attend back out to the prompt tokens, letting the whole image representation 
 absorb what the prompt was asking for. Run this three step exchange twice, and the decoder is done talking to itself.
 
+**Image here —** A diagram of the decoder's two-way attention: the prompt and output tokens and the image grid exchanging information (tokens → image, then image → tokens), repeated twice. Seeing the back-and-forth makes the abstract "talking to each other" step concrete.
+
 Mixed in among the prompt tokens for this entire exchange are a handful of extra tokens that don't represent any point or box at all, we call them “output tokens”. They start as generic, freshly initialized vectors, and their only role is 
 to sit through the same attention process as everything else, quietly absorbing information about the image and the prompt as they go. By the end, each output token holds a compressed description of the best candidate answer. The concluding 
 step, comparing that token against every one of the other 4,096 image tokens, expands it back out into an actual pixel by pixel mask.
@@ -587,6 +637,8 @@ or the bolts on the side. Instead of forcing one output token to somehow encode 
 different scales, for sub parts, a part, or the whole object. Because of how they’re trained, for any given training example, only the best-matching of the three candidates gets reinforced, never all three averaged against the same target. 
 That's what lets the three specialize into genuinely different answers instead of collapsing into three copies of the same blurry compromise due to averaging. The fourth token's job is separate and simpler: predict numerically, how good each 
 of the three candidate masks are. It acts as an estimate trained against the real overlap score, and exactly the number the code calls the “score”.
+
+**Table here —** A three-column comparison of the candidate masks for one ambiguous click (sub-part, part, and whole object), each shown with its predicted score. It makes "multi-mask output" and the scoring token tangible, and shows why the highest-scoring mask is the one we keep.
 
 </Collapsible>
 
@@ -609,6 +661,8 @@ into a patch embedding back in 4.3. By the time round $t+1$ runs, $E$ already ca
 claim territory the model was too conservative about, or a background point to carve out something it was too generous with, and the correction only has to account for what changed.
 
 With this understanding of the backend, we can build up our mask encoder and apply our Voronoi Mosaic selectively.
+
+**Image here —** A before-and-after of refinement: the mask from a single click, then the improved mask after adding a second point and feeding the previous logits back in as a warm start. It makes the warm-start idea visible — the correction only has to fix what changed, not rebuild the mask from scratch.
 
 </Collapsible>
 
@@ -667,7 +721,7 @@ best_idx = int(np.argmax(scores))
 best_mask = masks[best_idx].astype(bool)
 ```
 
-*Figure — three candidate masks with scores, best one highlighted*
+**Image here —** The three candidate masks SAM returns for the single cab click, side by side with their confidence scores and the best one highlighted. It shows the ambiguity problem and the score-based selection playing out on the real truck image. *(Generated by running the notebook above.)*
 
 One point on a truck's cab is ambiguous in exactly the way 4.2 and 4.5 described. If the best mask stops short of the full truck, we refine rather than restart, exactly as in 4.6: pass the previous logits back in as a warm start, and add a second 
 foreground point further along the truck bed.
@@ -686,7 +740,7 @@ refined_masks, _, _ = predictor.predict(
 final_mask = refined_masks[0].astype(bool)
 ```
 
-*Figure — refined mask overlay on the truck*
+**Image here —** The refined mask overlaid on the truck after the second point and the logits warm-start. Placing it next to the previous result shows how one extra click completes the object. *(Generated by running the notebook above.)*
 
 From mask to mosaic. With `final_mask` in hand, everything from Section 3 becomes available again, just restricted to a shape instead of a rectangle. `srgb_to_linear`, `r_lin`/`g_lin`/`b_lin`, and the Sobel gradient from 3.5 all carry over unchanged. 
 The only new line is the one that matters, multiplying the density field by the mask, so every pixel outside the truck drops to zero density and can never be sampled.
@@ -769,7 +823,7 @@ plt.axis("off")
 plt.show()
 ```
 
-*Figure — final masked Voronoi mosaic of the truck*
+**Image here —** The final masked Voronoi mosaic of the truck. It's the payoff of the whole section — detail only where SAM told us to look — and sits naturally beside the dog mosaic from Adaptive Sampling for a direct comparison. *(Generated by running the notebook above.)*
 
 The truck comes out tiled in exactly the same spirit as the puppy did, dense where the density field says there's detail, sparse where it doesn't. However, now that detail only exists where SAM told us to look. Section 3 taught the algorithm where 
 to place points; Section 4 gave us a system on where to stop.

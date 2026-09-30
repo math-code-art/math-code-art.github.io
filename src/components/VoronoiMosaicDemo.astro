@@ -1,0 +1,409 @@
+---
+// Interactive proof-of-concept for the adaptive-sampling pipeline.
+// Runs entirely in the browser, no dependencies. It builds a source image
+// (a procedural sample, or one the user uploads), computes a linearized-
+// luminance + Sobel density field, samples points weighted by that field,
+// partitions every pixel to its nearest seed (a grid-accelerated Voronoi),
+// and renders three panels: Original, Density field, and the Voronoi mosaic.
+---
+
+<div class="vdemo">
+  <div class="vdemo__stage">
+    <div class="vdemo__stack">
+      <figure>
+        <canvas id="vdemo-orig" width="220" height="220" aria-label="Original source image"></canvas>
+        <figcaption>Original</figcaption>
+      </figure>
+      <figure>
+        <canvas id="vdemo-dens" width="220" height="220" aria-label="Density field heatmap"></canvas>
+        <figcaption>Density field</figcaption>
+      </figure>
+    </div>
+    <figure class="vdemo__hero">
+      <canvas id="vdemo-mos" width="512" height="512" aria-label="Resulting Voronoi mosaic"></canvas>
+      <figcaption>Voronoi mosaic</figcaption>
+    </figure>
+  </div>
+
+  <div class="vdemo__controls">
+    <div class="vdemo__source">
+      <label class="vdemo__file">
+        Upload image
+        <input type="file" id="vdemo-file" accept="image/*" />
+      </label>
+      <button type="button" id="vdemo-sample">Use sample</button>
+      <button type="button" class="vdemo__download" id="vdemo-download">Download mosaic</button>
+      <output id="vdemo-filename">sample image</output>
+    </div>
+    <p class="vdemo__priv">Your image is processed entirely in your browser &mdash; nothing is uploaded.</p>
+
+    <div class="vdemo__sliders">
+      <label class="vdemo__row">
+        <span>Brightness weight <code>w_b</code></span>
+        <input type="range" id="vdemo-wb" min="0" max="1" step="0.05" value="0.6" />
+        <output id="vdemo-wbv">0.60</output>
+      </label>
+      <label class="vdemo__row">
+        <span>Edge weight <code>w_e</code></span>
+        <input type="range" id="vdemo-we" min="0" max="1" step="0.05" value="0.4" />
+        <output id="vdemo-wev">0.40</output>
+      </label>
+      <label class="vdemo__row">
+        <span>Points <code>N</code></span>
+        <input type="range" id="vdemo-n" min="100" max="1200" step="50" value="500" />
+        <output id="vdemo-nv">500</output>
+      </label>
+    </div>
+
+    <div class="vdemo__buttons">
+      <button type="button" id="vdemo-relax">Lloyd relax &times;1</button>
+      <button type="button" id="vdemo-resample">Resample</button>
+      <label class="vdemo__chk"><input type="checkbox" id="vdemo-showpts" /> Show points</label>
+    </div>
+    <p class="vdemo__hint">
+      Turn <code>w_b</code> up to chase dark regions, <code>w_e</code> up to chase edges. Relax a
+      couple of times to even out clumps &mdash; too many and the mosaic drifts toward a boring grid.
+    </p>
+  </div>
+</div>
+
+<script>
+  // Fixed long-side targets; the short side scales to the image's aspect ratio.
+  const WORK_LONG = 220, MOS_LONG = 512, MIN_SHORT = 24;
+  let W = WORK_LONG, H = WORK_LONG, NPX = W * H;   // working grid (density + sampling)
+  let MW = MOS_LONG, MH = MOS_LONG;                 // mosaic render / download size
+
+  const origCanvas = document.getElementById('vdemo-orig');
+  const densCanvas = document.getElementById('vdemo-dens');
+  const mosCanvas = document.getElementById('vdemo-mos');
+  if (origCanvas && densCanvas && mosCanvas) {
+    const octx = origCanvas.getContext('2d');
+    const dctx = densCanvas.getContext('2d');
+    const mctx = mosCanvas.getContext('2d');
+
+    // Off-screen source canvas at working resolution.
+    const src = document.createElement('canvas');
+    src.width = W; src.height = H;
+    const sctx = src.getContext('2d', { willReadFrequently: true });
+    let srcData;
+    let lum, edge, dens, cdf, label;   // grid-sized arrays, (re)allocated by setDimensions
+    const s2l = (u) => { u /= 255; return u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4); };
+
+    // Size the working grid + mosaic to the image's aspect ratio: the long side is
+    // fixed (220 working / 512 mosaic), the short side scales. No cropping, no stretch
+    // (aside from a tiny squash on extreme panoramas clamped by MIN_SHORT).
+    function setDimensions(ar) {
+      if (ar >= 1) { W = WORK_LONG; H = Math.max(MIN_SHORT, Math.round(WORK_LONG / ar)); }
+      else { H = WORK_LONG; W = Math.max(MIN_SHORT, Math.round(WORK_LONG * ar)); }
+      NPX = W * H;
+      // Mosaic keeps the working grid's exact aspect, scaled so its long side = MOS_LONG.
+      const scale = MOS_LONG / Math.max(W, H);
+      MW = Math.round(W * scale); MH = Math.round(H * scale);
+      lum = new Float32Array(NPX); edge = new Float32Array(NPX);
+      dens = new Float32Array(NPX); cdf = new Float32Array(NPX); label = new Int32Array(NPX);
+      src.width = W; src.height = H;
+      origCanvas.width = W; origCanvas.height = H;
+      densCanvas.width = W; densCanvas.height = H;
+      mosCanvas.width = MW; mosCanvas.height = MH;
+    }
+
+    // The built-in sample: bright background, a dark "subject", a few edges.
+    function drawProcedural() {
+      const grad = sctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, '#eef1f4'); grad.addColorStop(1, '#dde2e8');
+      sctx.fillStyle = grad; sctx.fillRect(0, 0, W, H);
+      sctx.fillStyle = '#c9b79c'; sctx.fillRect(28, 128, 92, 66);
+      sctx.fillStyle = '#26262e';
+      sctx.beginPath(); sctx.ellipse(142, 92, 54, 62, 0, 0, Math.PI * 2); sctx.fill();
+      sctx.fillStyle = '#f5f3ee';
+      sctx.beginPath(); sctx.arc(128, 74, 11, 0, Math.PI * 2); sctx.fill();
+      sctx.strokeStyle = '#6b5b45'; sctx.lineWidth = 4;
+      sctx.beginPath(); sctx.moveTo(16, 44); sctx.lineTo(204, 66); sctx.stroke();
+      sctx.strokeStyle = '#3a3a44'; sctx.lineWidth = 3;
+      sctx.beginPath(); sctx.arc(142, 92, 32, 0, Math.PI * 2); sctx.stroke();
+    }
+
+    // Draw an uploaded image to fill the source canvas. setDimensions already sized
+    // the canvas to the image's aspect, so this scales the whole image in — no crop.
+    function drawImageFit(img) {
+      sctx.fillStyle = '#ffffff'; sctx.fillRect(0, 0, W, H);
+      sctx.drawImage(img, 0, 0, W, H);
+    }
+
+    // Recompute luminance + Sobel edges and mirror the source into the Original panel.
+    function computeStats() {
+      srcData = sctx.getImageData(0, 0, W, H).data;
+      octx.drawImage(src, 0, 0);
+      for (let i = 0; i < NPX; i++) {
+        lum[i] = 0.2126 * s2l(srcData[i * 4]) + 0.7152 * s2l(srcData[i * 4 + 1]) + 0.0722 * s2l(srcData[i * 4 + 2]);
+      }
+      let emax = 1e-8;
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const i = y * W + x;
+          const gx = -lum[i - W - 1] - 2 * lum[i - 1] - lum[i + W - 1] + lum[i - W + 1] + 2 * lum[i + 1] + lum[i + W + 1];
+          const gy = -lum[i - W - 1] - 2 * lum[i - W] - lum[i - W + 1] + lum[i + W - 1] + 2 * lum[i + W] + lum[i + W + 1];
+          const m = Math.hypot(gx, gy);
+          edge[i] = m; if (m > emax) emax = m;
+        }
+      }
+      for (let i = 0; i < NPX; i++) edge[i] /= emax;
+    }
+
+    // --- State ---
+    let wb = 0.6, we = 0.4, N = 500, showPts = false;
+    let seedX = new Float32Array(N), seedY = new Float32Array(N);
+    let seedColor = new Uint8Array(N * 3);
+    let sumX, sumY, cnt;
+    let grid = null;
+
+    function computeDensity() {
+      let sum = 0;
+      for (let i = 0; i < NPX; i++) { let d = wb * (1 - lum[i]) + we * edge[i]; if (d < 1e-6) d = 1e-6; dens[i] = d; sum += d; }
+      let acc = 0; const inv = 1 / sum;
+      for (let i = 0; i < NPX; i++) { acc += dens[i] * inv; cdf[i] = acc; }
+    }
+
+    function sampleSeeds() {
+      seedX = new Float32Array(N); seedY = new Float32Array(N);
+      for (let k = 0; k < N; k++) {
+        const r = Math.random();
+        let lo = 0, hi = NPX - 1;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (cdf[mid] < r) lo = mid + 1; else hi = mid; }
+        seedX[k] = (lo % W) + Math.random();
+        seedY[k] = ((lo / W) | 0) + Math.random();
+      }
+    }
+
+    // Each cell is painted with the source colour at its generator's location.
+    function computeSeedColors() {
+      seedColor = new Uint8Array(N * 3);
+      for (let k = 0; k < N; k++) {
+        const sx = Math.min(W - 1, Math.max(0, seedX[k] | 0));
+        const sy = Math.min(H - 1, Math.max(0, seedY[k] | 0));
+        const si = (sy * W + sx) * 4;
+        seedColor[k * 3] = srcData[si]; seedColor[k * 3 + 1] = srcData[si + 1]; seedColor[k * 3 + 2] = srcData[si + 2];
+      }
+    }
+
+    // Uniform grid over the seeds, for fast nearest-seed queries.
+    function buildGrid() {
+      const cell = Math.max(2, Math.round(Math.sqrt((W * H) / Math.max(1, N))));
+      const gw = Math.ceil(W / cell), gh = Math.ceil(H / cell);
+      const heads = new Int32Array(gw * gh).fill(-1);
+      const next = new Int32Array(N).fill(-1);
+      for (let k = 0; k < N; k++) {
+        const gx = Math.min(gw - 1, (seedX[k] / cell) | 0);
+        const gy = Math.min(gh - 1, (seedY[k] / cell) | 0);
+        const b = gy * gw + gx; next[k] = heads[b]; heads[b] = k;
+      }
+      grid = { cell, gw, gh, heads, next };
+    }
+
+    // Nearest seed to a point (x, y) in working-grid coordinates.
+    function nearestSeed(x, y) {
+      const { cell, gw, gh, heads, next } = grid;
+      const gx = Math.min(gw - 1, (x / cell) | 0), gy = Math.min(gh - 1, (y / cell) | 0);
+      let best = -1, bestD = Infinity;
+      for (let r = 0; ; r++) {
+        const x0 = Math.max(0, gx - r), x1 = Math.min(gw - 1, gx + r);
+        const y0 = Math.max(0, gy - r), y1 = Math.min(gh - 1, gy + r);
+        for (let cyi = y0; cyi <= y1; cyi++) {
+          for (let cxi = x0; cxi <= x1; cxi++) {
+            if (Math.max(Math.abs(cxi - gx), Math.abs(cyi - gy)) !== r) continue;
+            for (let k = heads[cyi * gw + cxi]; k !== -1; k = next[k]) {
+              const dx = seedX[k] - x, dy = seedY[k] - y; const d = dx * dx + dy * dy;
+              if (d < bestD) { bestD = d; best = k; }
+            }
+          }
+        }
+        if (best !== -1 && (r * cell) * (r * cell) > bestD) break;
+        if (x0 === 0 && y0 === 0 && x1 === gw - 1 && y1 === gh - 1) break;
+      }
+      return best;
+    }
+
+    // Assign every working-grid pixel to its nearest seed; accumulate centroids for Lloyd.
+    function assign() {
+      buildGrid();
+      sumX = new Float64Array(N); sumY = new Float64Array(N); cnt = new Int32Array(N);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const k = nearestSeed(x, y);
+          label[y * W + x] = k;
+          sumX[k] += x; sumY[k] += y; cnt[k]++;
+        }
+      }
+    }
+
+    function relax() {
+      for (let k = 0; k < N; k++) { if (cnt[k] > 0) { seedX[k] = sumX[k] / cnt[k]; seedY[k] = sumY[k] / cnt[k]; } }
+    }
+
+    function renderDensity() {
+      const img = dctx.createImageData(W, H); const d = img.data;
+      let mx = 0; for (let i = 0; i < NPX; i++) if (dens[i] > mx) mx = dens[i];
+      for (let i = 0; i < NPX; i++) {
+        const v = dens[i] / mx;
+        d[i * 4] = Math.round(238 + (15 - 238) * v);
+        d[i * 4 + 1] = Math.round(241 + (118 - 241) * v);
+        d[i * 4 + 2] = Math.round(244 + (110 - 244) * v);
+        d[i * 4 + 3] = 255;
+      }
+      dctx.putImageData(img, 0, 0);
+    }
+
+    // Mosaic rendered at MW x MH: for each output pixel, colour by nearest seed.
+    function renderMosaic() {
+      const img = mctx.createImageData(MW, MH); const d = img.data;
+      const sx = W / MW, sy = H / MH;
+      for (let Y = 0; Y < MH; Y++) {
+        for (let X = 0; X < MW; X++) {
+          const k = nearestSeed((X + 0.5) * sx, (Y + 0.5) * sy);
+          const o = (Y * MW + X) * 4, c = k * 3;
+          d[o] = seedColor[c]; d[o + 1] = seedColor[c + 1]; d[o + 2] = seedColor[c + 2]; d[o + 3] = 255;
+        }
+      }
+      mctx.putImageData(img, 0, 0);
+      if (showPts) {
+        const scx = MW / W, scy = MH / H;
+        mctx.fillStyle = 'rgba(20,20,25,0.7)';
+        for (let k = 0; k < N; k++) { mctx.beginPath(); mctx.arc(seedX[k] * scx, seedY[k] * scy, 1.7, 0, Math.PI * 2); mctx.fill(); }
+      }
+    }
+
+    function fullUpdate() {
+      computeDensity(); sampleSeeds(); computeSeedColors(); assign();
+      renderDensity(); renderMosaic();
+    }
+
+    // rAF throttle so dragging a slider stays smooth
+    let queued = false;
+    function schedule() { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; fullUpdate(); }); }
+
+    const wbEl = document.getElementById('vdemo-wb');
+    const weEl = document.getElementById('vdemo-we');
+    const nEl = document.getElementById('vdemo-n');
+    const wbv = document.getElementById('vdemo-wbv');
+    const wev = document.getElementById('vdemo-wev');
+    const nv = document.getElementById('vdemo-nv');
+
+    wbEl.addEventListener('input', () => { wb = +wbEl.value; wbv.textContent = wb.toFixed(2); schedule(); });
+    weEl.addEventListener('input', () => { we = +weEl.value; wev.textContent = we.toFixed(2); schedule(); });
+    nEl.addEventListener('input', () => { N = +nEl.value; nv.textContent = N; schedule(); });
+    document.getElementById('vdemo-resample').addEventListener('click', () => { sampleSeeds(); computeSeedColors(); assign(); renderMosaic(); });
+    document.getElementById('vdemo-relax').addEventListener('click', () => { relax(); computeSeedColors(); assign(); renderMosaic(); });
+    document.getElementById('vdemo-showpts').addEventListener('change', (e) => { showPts = e.target.checked; renderMosaic(); });
+
+    // Download the mosaic as a PNG (long side 512, keeps the photo's aspect).
+    document.getElementById('vdemo-download').addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = mosCanvas.toDataURL('image/png');
+      a.download = 'voronoi-mosaic.png';
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+
+    // Image source: upload from device, or return to the sample.
+    const fileEl = document.getElementById('vdemo-file');
+    const fileName = document.getElementById('vdemo-filename');
+    if (fileEl) {
+      fileEl.addEventListener('change', () => {
+        const file = fileEl.files && fileEl.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { setDimensions(img.width / img.height); drawImageFit(img); computeStats(); fullUpdate(); URL.revokeObjectURL(url); if (fileName) fileName.textContent = file.name; };
+        img.onerror = () => { URL.revokeObjectURL(url); if (fileName) fileName.textContent = "couldn't read that file"; };
+        img.src = url;
+      });
+    }
+    const sampleBtn = document.getElementById('vdemo-sample');
+    if (sampleBtn) sampleBtn.addEventListener('click', () => {
+      setDimensions(1); drawProcedural(); computeStats(); fullUpdate();
+      if (fileEl) fileEl.value = '';
+      if (fileName) fileName.textContent = 'sample image';
+    });
+
+    // Initial render with the built-in sample (square).
+    setDimensions(1);
+    drawProcedural();
+    computeStats();
+    fullUpdate();
+  }
+</script>
+
+<style>
+  .vdemo {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    max-width: 548px;   /* interface cap (20% smaller than 685); mosaic still renders at 512 internally, downscaled for sharpness */
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 1.1rem 1.2rem;
+    margin: 1.25rem 0 1.5rem;
+  }
+
+  /* Visuals: small stack (Original + Density) on the left, big Mosaic on the right, 1:1:3. */
+  .vdemo__stage { display: flex; gap: 1rem; align-items: flex-start; }
+  .vdemo__stack { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 1rem; }
+  .vdemo__hero { flex: 2.5 1 0; min-width: 0; margin: 0; }
+  .vdemo figure { margin: 0; }
+  .vdemo canvas {
+    width: 100%; height: auto; display: block;
+    border: 1px solid var(--border-2); border-radius: 4px; background: #fff;
+  }
+  .vdemo figcaption {
+    font-family: var(--font-mono); font-size: 0.66rem; color: var(--muted);
+    text-align: center; margin-top: 0.4rem;
+  }
+
+  .vdemo__controls { display: flex; flex-direction: column; gap: 0.8rem; }
+
+  .vdemo__source { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .vdemo__file, .vdemo__download {
+    font-family: var(--font-mono); font-size: 0.74rem; cursor: pointer;
+    color: var(--bg); background: var(--accent);
+    border: 1px solid var(--accent); border-radius: 5px; padding: 0.42rem 0.75rem;
+    transition: opacity 0.15s;
+  }
+  .vdemo__file:hover, .vdemo__download:hover { opacity: 0.88; }
+  .vdemo__file input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  #vdemo-sample {
+    font-family: var(--font-mono); font-size: 0.74rem; cursor: pointer;
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border-2); border-radius: 5px; padding: 0.42rem 0.75rem;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #vdemo-sample:hover { border-color: var(--accent); color: var(--accent); }
+  #vdemo-filename { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+  .vdemo__priv { font-size: 0.68rem; color: var(--muted); margin: -0.3rem 0 0; }
+
+  .vdemo__sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem 1.4rem; }
+  .vdemo__row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.35rem 0.6rem; font-size: 0.8rem; color: var(--text); }
+  .vdemo__row span { grid-column: 1 / -1; }
+  .vdemo__row code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface-2); padding: 0.05em 0.3em; border-radius: 3px; }
+  .vdemo__row input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .vdemo__row output { font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent); min-width: 2.4em; text-align: right; }
+
+  .vdemo__buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .vdemo__buttons button {
+    font-family: var(--font-mono); font-size: 0.74rem; cursor: pointer;
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border-2); border-radius: 5px; padding: 0.4rem 0.7rem;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .vdemo__buttons button:hover { border-color: var(--accent); color: var(--accent); }
+  .vdemo__chk { display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--muted); }
+  .vdemo__chk input { accent-color: var(--accent); }
+
+  .vdemo__hint { font-size: 0.74rem; line-height: 1.6; color: var(--muted); margin: 0.1rem 0 0; }
+  .vdemo__hint code { font-family: var(--font-mono); font-size: 0.9em; }
+
+  /* Minimal small-screen fallback (finer responsive is a later pass). */
+  @media (max-width: 560px) {
+    .vdemo__stage { flex-direction: column; }
+    .vdemo__sliders { grid-template-columns: 1fr; }
+  }
+</style>
