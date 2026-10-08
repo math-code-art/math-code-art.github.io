@@ -12,4 +12,10 @@ export default defineConfig({
       rehypePlugins: [rehypeKatex],
     }),
   ],
+  vite: {
+    // transformers.js (used by the SAM worker) ships large prebuilt bundles;
+    // leave it out of dep pre-bundling and build module workers as ES.
+    optimizeDeps: { exclude: ['@huggingface/transformers'] },
+    worker: { format: 'es' },
+  },
 });
