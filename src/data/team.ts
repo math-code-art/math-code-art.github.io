@@ -9,11 +9,11 @@ export interface Person {
 export const advisors: Person[] = [
   { name: 'Dr. Jiayin Lu', role: 'Faculty Advisor', affiliation: 'UCLA Mathematics', photo: '/team/jiayin-lu.png', url: 'https://jlu227.wixsite.com/kay-lu' },
   { name: 'Dr. Ying Jiang', role: 'Faculty Advisor', affiliation: 'UCLA Mathematics', photo: '/team/ying-jiang.png', url: 'https://yingjiang96.github.io/' },
-  { name: 'Dr. Yue Sun', role: 'Faculty Advisor', affiliation: 'UW–Madison Mathematics', photo: '/team/yue-sun.png', url: 'http://sun-yue.com/' },
+  { name: 'Dr. Yue Sun', role: 'Faculty Advisor', affiliation: 'UW–Madison Mathematics', photo: '/team/yue-sun.JPG', url: 'http://sun-yue.com/' },
   { name: 'Wanxi Yang', role: 'Faculty Advisor', affiliation: 'Independent' },
   { name: 'Yumeng He', role: 'Faculty Advisor', affiliation: 'UCLA Computer Science', photo: '/team/yumeng-he.JPG', url: 'https://heyumeng.com/' },
-  { name: 'Prof. Chenfanfu Jiang', role: 'Faculty Advisor', affiliation: 'UCLA Mathematics', photo: '/team/chenfanfu-jiang.png', url: 'https://www.math.ucla.edu/~cffjiang/' },
   { name: 'Prof. Chris Rycroft', role: 'Faculty Advisor', affiliation: 'UW–Madison Mathematics', photo: '/team/chris-rycroft.jpg', url: 'https://people.math.wisc.edu/~chr/' },
+  { name: 'Prof. Chenfanfu Jiang', role: 'Faculty Advisor', affiliation: 'UCLA Mathematics', photo: '/team/chenfanfu-jiang.png', url: 'https://www.math.ucla.edu/~cffjiang/' },
 ];
 
 export const developers: Person[] = [
