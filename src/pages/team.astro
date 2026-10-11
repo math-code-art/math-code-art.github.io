@@ -7,14 +7,14 @@ import { advisors, developers } from '../data/team';
   <section class="section-sm page-header">
     <div class="container">
       <h1>Team</h1>
-      <p>Tutorials developed by students, advised by faculty at UCLA Mathematics and Computer Science.</p>
+      <p>Tutorials developed by students, advised by faculty at UCLA Mathematics and Computer Science, and UW–Madison Mathematics.</p>
     </div>
   </section>
 
   <section class="section" style="padding-top: 2rem">
     <div class="container">
 
-      <h2 class="group-label">Tutorial developers</h2>
+      <h2 class="group-label">Student developers</h2>
       <div class="grid-3" style="margin-bottom: 3rem">
         {developers.map(p => {
           const initials = p.name.split(' ').filter((n: string) => !n.endsWith('.')).map((n: string) => n[0]).slice(0,2).join('');
