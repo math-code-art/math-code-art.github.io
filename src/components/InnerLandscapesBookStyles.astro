@@ -1,0 +1,97 @@
+<span class="inner-landscapes-page-marker" aria-hidden="true"></span>
+
+<style is:global>
+  .book-content:has(.inner-landscapes-page-marker) {
+    min-width: 0;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) h4 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.2rem;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) table {
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) th,
+  .book-content:has(.inner-landscapes-page-marker) td {
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    font-size: inherit;
+    color: var(--text);
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) th {
+    border-bottom: 2px solid var(--border-2);
+    font-weight: 600;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) table tbody tr:last-child td {
+    font-size: inherit;
+    color: var(--text);
+    line-height: inherit;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-results-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-results-grid img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    margin-bottom: 0.35rem;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-results-grid figcaption {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-video-work video {
+    display: block;
+    width: 100%;
+    max-width: 720px;
+    aspect-ratio: 1;
+    object-fit: contain;
+    background: #000;
+    margin: 0 auto 0.5rem;
+  }
+
+  .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-caption {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 600px) {
+    .book-content:has(.inner-landscapes-page-marker) .inner-landscapes-results-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>
