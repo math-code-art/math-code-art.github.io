@@ -34,7 +34,7 @@ async function encode(data, width, height) {
   self.postMessage({ type: 'encoded' });
 }
 
-async function decode(nx, ny, label) {
+async function decode(nx, ny, label, id, gen) {
   // Points are given in the reshaped (model input) space: normalized * reshaped size.
   const reshaped = imageInputs.reshaped_input_sizes[0]; // [h, w]
   const input_points = new Tensor('float32', new Float32Array([nx * reshaped[1], ny * reshaped[0]]), [1, 1, 1, 2]);
@@ -54,16 +54,16 @@ async function decode(nx, ny, label) {
   const out = new Uint8Array(H * Wd);
   const off = best * H * Wd;
   for (let i = 0; i < H * Wd; i++) out[i] = md[off + i] ? 1 : 0;
-  self.postMessage({ type: 'mask', data: out.buffer, width: Wd, height: H, score: scores[best] }, [out.buffer]);
+  self.postMessage({ type: 'mask', data: out.buffer, width: Wd, height: H, score: scores[best], id, gen }, [out.buffer]);
 }
 
-self.onmessage = async (e) => {
+// Serialize all ops so model() is never called concurrently (several decodes can queue up).
+let chain = Promise.resolve();
+self.onmessage = (e) => {
   const msg = e.data;
-  try {
+  chain = chain.then(async () => {
     if (msg.type === 'load') await load();
     else if (msg.type === 'encode') await encode(msg.data, msg.width, msg.height);
-    else if (msg.type === 'decode') await decode(msg.nx, msg.ny, msg.label);
-  } catch (err) {
-    self.postMessage({ type: 'error', message: String((err && err.message) || err) });
-  }
+    else if (msg.type === 'decode') await decode(msg.nx, msg.ny, msg.label, msg.id, msg.gen);
+  }).catch((err) => self.postMessage({ type: 'error', message: String((err && err.message) || err) }));
 };
