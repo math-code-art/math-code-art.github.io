@@ -2,6 +2,7 @@ export type NewsType = 'Talk' | 'Exhibition' | 'Publication' | 'New Tutorial';
 
 export interface NewsItem {
   date: string;       // ISO date: 'YYYY-MM-DD'
+  dateLabel?: string; // shown instead of date, for ranges and upcoming items
   title: string;
   description: string;
   type: NewsType;
@@ -13,8 +14,40 @@ export interface NewsItem {
   slidesDownloadUrl?: string; // URL for download button (PDFs only)
 }
 
-// Most recent first
+// Latest date first
 export const news: NewsItem[] = [
+  {
+    date: '2028-03-01', // placeholder for ordering: after the exhibitions, no publication date yet
+    dateLabel: 'Upcoming',
+    title: 'Upcoming Book with World Scientific',
+    description: 'The Math+Code+Art public-education book is forthcoming, under contract with World Scientific.',
+    type: 'Publication',
+  },
+  {
+    date: '2027-11-01',
+    dateLabel: 'November 2027',
+    title: 'Upcoming Exhibition: Cellular Impressions at the Arts Visalia Visual Art Center',
+    description: 'Cellular Impressions will be on view at the Arts Visalia Visual Art Center in November 2027.',
+    type: 'Exhibition',
+    link: '/exhibitions/cellular-impressions',
+    linkLabel: 'View exhibition',
+  },
+  {
+    date: '2027-08-01',
+    dateLabel: 'August 2027 – February 2028',
+    title: 'Upcoming Exhibition: Algorithmic Forms at the Oceanside Museum of Art',
+    description: 'Algorithmic Forms will be on view at the Oceanside Museum of Art from August 2027 to February 2028.',
+    type: 'Exhibition',
+  },
+  {
+    date: '2026-11-12',
+    dateLabel: 'November 12–15, 2026',
+    title: 'Special Session at SIGCSE Virtual 2026',
+    description: 'Math+Code+Art is a special session at SIGCSE Virtual 2026, with student talks by Dengyuhan Dai (The Traveling Salesman Problem as Line Art), Shanmei Wanyan (Inner Landscapes), and Meichen Wan (Whisper of Nature).',
+    type: 'Talk',
+    link: '/papers/sigcse-2026-math-code-art.pdf',
+    linkLabel: 'Read the proposal',
+  },
   {
     date: '2026-03-11',
     title: 'Talk: Traveling Salesman Problem — From Mathematics to Art',

@@ -29,3 +29,5 @@ npm-debug.log*
 # Environment
 .env
 .env.*
+
+file/
