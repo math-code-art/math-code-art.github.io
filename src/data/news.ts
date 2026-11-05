@@ -31,8 +31,10 @@ export const news: NewsItem[] = [
     title: 'Upcoming Exhibition: Cellular Impressions at the Arts Visalia Visual Art Center',
     description: 'Cellular Impressions will be on view at the Arts Visalia Visual Art Center in November 2027.',
     type: 'Exhibition',
-    link: '/exhibitions/cellular-impressions',
-    linkLabel: 'View exhibition',
+    link: 'https://www.artsvisalia.org/november-2027-ucla-mathematics-department/',
+    linkLabel: 'Arts Visalia page',
+    extraLink: '/exhibitions/cellular-impressions',
+    extraLinkLabel: 'View exhibition',
   },
   {
     date: '2027-08-01',
