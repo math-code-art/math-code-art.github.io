@@ -10,6 +10,8 @@ export interface NewsItem {
   photoSrc?: string;        // speaker photo — landscape-oriented
   link?: string;
   linkLabel?: string;
+  extraLink?: string;
+  extraLinkLabel?: string;
   slidesEmbedUrl?: string;  // URL to embed in iframe (PDF path or Google Slides /embed URL)
   slidesDownloadUrl?: string; // URL for download button (PDFs only)
 }
@@ -45,8 +47,10 @@ export const news: NewsItem[] = [
     title: 'Special Session at SIGCSE Virtual 2026',
     description: 'Math+Code+Art is a special session at SIGCSE Virtual 2026, with student talks by Dengyuhan Dai (The Traveling Salesman Problem as Line Art), Shanmei Wanyan (Inner Landscapes), and Meichen Wan (Whisper of Nature).',
     type: 'Talk',
-    link: '/papers/sigcse-2026-math-code-art.pdf',
-    linkLabel: 'Read the proposal',
+    link: 'https://sigcsevirtual2026.acm.org/details/sigcse-virtual-2026-special-sessions/2/Math-Code-Art-An-Initiative-for-Learning-Mathematics-and-Computation-Through-Creativ',
+    linkLabel: 'Event page',
+    extraLink: '/papers/sigcse-2026-math-code-art.pdf',
+    extraLinkLabel: 'Read the proposal',
   },
   {
     date: '2026-03-11',

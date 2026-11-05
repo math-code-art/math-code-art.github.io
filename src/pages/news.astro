@@ -51,6 +51,11 @@ function formatDate(iso: string) {
                     {item.linkLabel ?? 'Learn more'} →
                   </a>
                 )}
+                {item.extraLink && (
+                  <a href={item.extraLink} class="news-link" {...(item.extraLink.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+                    {item.extraLinkLabel ?? 'Learn more'} →
+                  </a>
+                )}
                 {item.slidesEmbedUrl && (
                   <button
                     class="news-link slides-link"
