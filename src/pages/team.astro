@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { advisors, developers } from '../data/team';
+import { advisors, developers, pastDevelopers } from '../data/team';
 ---
 <Layout title="Team">
 
@@ -74,6 +74,19 @@ import { advisors, developers } from '../data/team';
         })}
       </div>
 
+      <h2 class="group-label" style="margin-top: 3rem">Past student developers</h2>
+      <ul class="past-list">
+        {pastDevelopers.map(p => (
+          <li>
+            {p.url
+              ? <a href={p.url} target="_blank" rel="noopener noreferrer" class="name-link">{p.name}</a>
+              : <span>{p.name}</span>
+            }
+            <span class="affil"> · {p.affiliation}</span>
+          </li>
+        ))}
+      </ul>
+
     </div>
   </section>
 
@@ -128,4 +141,8 @@ import { advisors, developers } from '../data/team';
 .avatar-link { display: block; border-radius: 50%; }
 .name-link { color: inherit; transition: color 0.15s; }
 .name-link:hover { color: var(--accent); }
+
+.past-list { list-style: none; padding: 0; margin: 0; }
+.past-list li { font-size: 0.95rem; font-weight: 600; padding: 0.3rem 0; }
+.past-list .affil { font-weight: 400; }
 </style>
